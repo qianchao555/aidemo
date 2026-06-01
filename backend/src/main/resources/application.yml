@@ -1,0 +1,94 @@
+
+server:
+  port: 18989
+
+spring:
+  application:
+    name: ai-backend
+  datasource:
+    url: jdbc:postgresql://localhost:5432/aidemo
+    username: postgres
+    password: 123456
+    driver-class-name: org.postgresql.Driver
+  ai:
+    dashscope:
+      api-key: ${AI_DASHSCOPE_API_KEY:sk-539bcdb175774d1cafa3c0f3adb9bad6}
+      base-url: https://dashscope.aliyuncs.com
+      #chat:聊天，image:图像生成，embedding:文本向量化
+      chat:
+        options:
+          model: qwen-plus
+          temperature: 0.85 #默认
+          #maxTokens: 2000  #默认不限制
+          topP: 0.8
+          topK: 50
+      embedding:
+        options:
+          model: text-embedding-v2
+          dimensions: 1536
+    #向量库配置 (PostgreSQL + pgvector)
+    vectorstore:
+      pgvector:
+        enabled: true
+        schema-name: public
+        table-name: xiaofuzi_knowledge_base2
+        dimensions: 1536
+        index-type: HNSW  #默认使用HNSW索引，适用于高维向量的近似最近邻搜索
+        distance-type: COSINE_DISTANCE  #余弦距离
+        initialize-schema: true #自动建表和索引（生产环境建议关闭，改为手动建表和索引）
+
+      milvus:
+        enabled: true
+        host: localhost
+        port: 19530
+        username: root
+        password: milvus
+        database-name: default
+        collection-name: xiaofuzi_knowledge_base
+        embedding-dimension: 1536
+        index-type: IVF_FLAT
+        metric-type: COSINE
+        initialize-schema: true
+    #MCP配置
+#    mcp:
+#      client:
+#        enabled: true
+#        name: xiaofuzi-mcp-client
+#        version: 1.0.0
+#        initialized: true
+#        request-timeout: 50s
+#        type: SYNC
+#        root-change-notification: true
+#        toolcallback.enabled: true
+#        annotation-scanner: true
+#        stdio:
+#          servers-configuration: classpath:/mcp-servers-config.json
+#      server:
+#        enabled: true
+#        name: xiaofuzi-mcp-server
+#        version: 1.0.0
+
+skills:
+  file-system:
+    path: ./external-skills
+
+#自定义配置
+ai:
+  chat:
+    enabled: true  # 启用手动配置的ChatModel
+    provider: dashscope  # 可选值: 默认dashscope, volcano-engine, openai
+    api-key: ${AI_DASHSCOPE_API_KEY:sk-539bcdb175774d1cafa3c0f3adb9bad6}
+    base-url: https://dashscope.aliyuncs.com
+    model: qwen-plus
+  agent:
+    name: xiaofuzi-agent
+    description: 一个拥有多种技能的智能助手,包括：时间查询、天气查询、计算器功能、内容创作
+    moderation:
+      name: content-moderation-agent
+      description: 内容审查助手，专门负责文本内容安全审查、敏感词检测、可读性检查、质量评估等
+    research:
+      name: research-agent
+      description: 研究/调研助手，提供信息搜集、事实核查、竞品分析、趋势挖掘等功能，解决AI幻觉问题
+
+logging:
+  config: classpath:logback-spring.xml
