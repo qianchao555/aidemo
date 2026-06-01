@@ -4,14 +4,13 @@ import type { ApiResponse } from '@/types'
 
 const http = axios.create({
   baseURL: '',
-  timeout: 30000,
-  headers: { 'Content-Type': 'application/json' }
+  timeout: 30000
 })
 
 http.interceptors.response.use(
   (response) => {
     const data = response.data as ApiResponse
-    if (data.code !== 200 && data.status === false) {
+    if (!data.status || data.code !== 200) {
       ElMessage.error(data.msg || '请求失败')
       return Promise.reject(new Error(data.msg))
     }
