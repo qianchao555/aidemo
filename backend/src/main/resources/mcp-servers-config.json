@@ -1,0 +1,35 @@
+{
+  "//注释//": "当启用AI应用时，MCP会根据这个配置，自动运行npx -y @modelcontextprotocol/server-brave-search来启动Brave Search的MCP服务器，并将BRAVE_API_KEY环境变量传递给它。启动成功后，AI模型就可以使用该服务器提供的工具来访问Brave Search的功能了。",
+  "brave-search": {
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-brave-search"
+    ],
+      "BRAVE_API_KEY": "your_brave_api_key_here"
+//      "BRAVE_API_KEY2": "${BRAVE_API_KEY}"
+  },
+//  "mcpServers": {
+//    "xiaofuzi-server": {
+//      "command": "java",
+//      "args": [
+//        "-cp",
+//        "target/ai-backend-1.0.0.jar",
+//        "org.springframework.boot.loader.launch.PropertiesLauncher"
+//      ],
+//      "env": {
+//        "JAVA_HOME": "C:\\Users\\Chao C Qian\\AppData\\Roaming\\Trae CN\\User\\globalStorage\\pleiades.java-extension-pack-jdk\\java\\17"
+//      }
+//    }
+//  },
+  "mcpServers": {
+    "xiaofuzi-local-server": {
+      "command": "java",
+      "args": [
+        "-jar",
+        "target/ai-backend-1.0.0.jar"
+      ],
+      "env": {}
+    }
+  }
+}

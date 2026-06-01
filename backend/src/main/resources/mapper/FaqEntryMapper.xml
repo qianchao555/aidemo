@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xiaofuzi.ai.mapper.FaqEntryMapper">
+
+    <resultMap id="FaqEntryResult" type="com.xiaofuzi.ai.entity.FaqEntry">
+        <id property="id" column="id"/>
+        <result property="question" column="question"/>
+        <result property="answer" column="answer"/>
+        <result property="keywords" column="keywords"/>
+        <result property="category" column="category"/>
+        <result property="sourceDoc" column="source_doc"/>
+        <result property="headingPath" column="heading_path"/>
+        <result property="hitCount" column="hit_count"/>
+        <result property="status" column="status"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.xiaofuzi.ai.entity.FaqEntry"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO faq_entry (question, answer, keywords, category, source_doc, heading_path,
+                               hit_count, status, create_time, update_time)
+        VALUES (#{question}, #{answer}, #{keywords}, #{category}, #{sourceDoc}, #{headingPath},
+                0, 'active', NOW(), NOW())
+    </insert>
+
+    <update id="update" parameterType="com.xiaofuzi.ai.entity.FaqEntry">
+        UPDATE faq_entry
+        SET question    = #{question},
+            answer      = #{answer},
+            keywords    = #{keywords},
+            category    = #{category},
+            source_doc  = #{sourceDoc},
+            heading_path = #{headingPath},
+            status      = #{status},
+            update_time = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <select id="findById" resultMap="FaqEntryResult">
+        SELECT * FROM faq_entry WHERE id = #{id}
+    </select>
+
+    <select id="findAllActive" resultMap="FaqEntryResult">
+        SELECT * FROM faq_entry WHERE status = 'active' ORDER BY hit_count DESC
+    </select>
+
+    <select id="findByCategory" resultMap="FaqEntryResult">
+        SELECT * FROM faq_entry WHERE category = #{category} AND status = 'active'
+        ORDER BY hit_count DESC
+    </select>
+
+    <select id="searchByKeyword" resultMap="FaqEntryResult">
+        SELECT * FROM faq_entry
+        WHERE status = 'active'
+          AND (question ILIKE CONCAT('%', #{keyword}, '%')
+               OR keywords ILIKE CONCAT('%', #{keyword}, '%'))
+        ORDER BY hit_count DESC
+    </select>
+
+    <select id="findTopByHitCount" resultMap="FaqEntryResult">
+        SELECT * FROM faq_entry WHERE status = 'active' ORDER BY hit_count DESC LIMIT #{limit}
+    </select>
+
+    <update id="incrementHitCount">
+        UPDATE faq_entry SET hit_count = hit_count + 1, update_time = NOW() WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        UPDATE faq_entry SET status = 'deleted', update_time = NOW() WHERE id = #{id}
+    </delete>
+
+</mapper>

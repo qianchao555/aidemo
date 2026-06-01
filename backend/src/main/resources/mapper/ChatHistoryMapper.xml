@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xiaofuzi.ai.mapper.ChatHistoryMapper">
+
+    <resultMap id="ChatHistoryResult" type="com.xiaofuzi.ai.entity.ChatHistory">
+        <id property="id" column="id"/>
+        <result property="threadId" column="thread_id"/>
+        <result property="role" column="role"/>
+        <result property="content" column="content"/>
+        <result property="sourceDoc" column="source_doc"/>
+        <result property="headingPath" column="heading_path"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.xiaofuzi.ai.entity.ChatHistory"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO chat_history (thread_id, role, content, source_doc, heading_path, create_time)
+        VALUES (#{threadId}, #{role}, #{content}, #{sourceDoc}, #{headingPath}, #{createTime})
+    </insert>
+
+    <select id="findByThreadId" resultMap="ChatHistoryResult">
+        SELECT * FROM chat_history
+        WHERE thread_id = #{threadId}
+        ORDER BY create_time ASC
+    </select>
+
+    <select id="findRecentByThreadId" resultMap="ChatHistoryResult">
+        SELECT * FROM chat_history
+        WHERE thread_id = #{threadId}
+        ORDER BY create_time DESC
+        LIMIT #{limit}
+    </select>
+
+    <delete id="deleteByThreadId">
+        DELETE FROM chat_history WHERE thread_id = #{threadId}
+    </delete>
+
+</mapper>

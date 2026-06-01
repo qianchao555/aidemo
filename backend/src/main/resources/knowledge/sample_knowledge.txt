@@ -1,0 +1,52 @@
+# 小夫子AI助手知识库 - 示例文档
+
+## 关于小夫子
+
+小夫子是一个基于Spring AI + Spring AI Alibaba Agent Framework构建的智能AI助手平台。
+它支持多Agent协作、内容创作工作流、MCP协议集成等高级功能。
+
+## 技术架构
+
+### 后端技术栈
+- Spring Boot 3.4.3
+- Spring AI 1.1.2
+- Spring AI Alibaba Agent Framework 1.1.2.0
+- 支持多厂商ChatModel切换：阿里云DashScope(通义千问)、火山引擎(豆包)、OpenAI(GPT)
+- MCP协议支持：Client和Server双模式
+- Agent Skills机制：基于文件系统的技能管理
+
+### 核心功能模块
+1. **内容创作工作流**：research → create → review，支持最多3次自动修订
+2. **Agent编排**：StateGraph驱动的多节点异步流程
+3. **MCP集成**：支持STDIO、SSE、Streamable HTTP等多种传输协议
+4. **RAG知识库**：基于PostgreSQL + pgvector 向量插件，支持语义检索增强生成
+
+### Agent体系
+- ResearchAgent：负责信息搜集、事实核查、竞品分析、趋势挖掘
+- CreatorAgent：负责文章生成、标题优化、内容润色
+- ModerationAgent：负责内容安全审查、质量评估
+- ToolsAgent：提供天气查询、时间查询、计算器等基础工具
+
+## Spring AI Alibaba Agent框架特点
+
+1. **StateGraph状态图**：类似LangGraph的图编排引擎，支持条件边、并行执行
+2. **ReactAgent**：基于ReAct范式的智能体，支持工具调用和多轮思考
+3. **Hook机制**：AgentHook、ModelHook、MessagesModelHook三级钩子体系
+4. **Skills渐进式披露**：按需加载技能，降低Token消耗
+5. **Checkpointer持久化**：支持Memory、Redis等多种后端存储对话状态
+
+## 内容创作最佳实践
+
+1. 明确主题和目标受众
+2. 充分利用研究阶段搜集的资料
+3. 审查阶段关注：事实准确性、内容完整性、语言流畅度
+4. 修订时严格依据研究资料，避免凭空添加信息
+5. 合理使用知识库增强内容的专业性和丰富度
+
+## RAG知识库使用指南
+
+1. 知识摄入：支持文本文件导入和API动态添加
+2. 文档分块：使用TokenTextSplitter进行智能分块（chunk_size=512, overlap=50）
+3. 向量化：通过阿里云DashScope text-embedding-v2模型（1536维）
+4. 语义检索：基于PostgreSQL/pgvector的COSINE_DISTANCE相似度检索
+5. 自动注入：RagMessageHook在模型调用前自动检索并注入相关知识
