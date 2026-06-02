@@ -7,7 +7,14 @@ CREATE TABLE public.xiaofuzi_knowledge_base2 (
 );
 CREATE INDEX xiaofuzi_knowledge_base2_index ON public.xiaofuzi_knowledge_base2 USING hnsw (embedding vector_cosine_ops);
 
-
+CREATE TABLE public.xiaofuzi_knowledge_base_v2 (
+                                                   id uuid DEFAULT uuid_generate_v4() NOT NULL,
+                                                   "content" text NULL,
+                                                   metadata json NULL,
+                                                   embedding public.vector NULL,
+                                                   CONSTRAINT xiaofuzi_knowledge_base_v2_pkey PRIMARY KEY (id)
+);
+CREATE INDEX xiaofuzi_knowledge_base_v2_index ON public.xiaofuzi_knowledge_base_v2 USING hnsw (embedding vector_cosine_ops);
 
 CREATE TABLE IF NOT EXISTS chat_history (
     id          BIGSERIAL PRIMARY KEY,
