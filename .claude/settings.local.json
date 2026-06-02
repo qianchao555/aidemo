@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mvn compile *)",
+      "Bash(git add *)",
+      "Bash(mvn dependency:tree -Dincludes=org.springframework.ai)",
+      "Bash(mvn dependency:tree -Dincludes=org.springframework.ai:spring-ai-core)",
+      "Bash(jar tf *)",
+      "Bash(javap *)"
+    ]
+  }
+}

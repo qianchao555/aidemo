@@ -83,6 +83,30 @@
       </el-tab-pane>
       <!-- Tab 4: 文档管理 -->
       <el-tab-pane label="文档管理" name="documents">
+        <!-- 统计卡片 -->
+        <el-row :gutter="20" style="margin-bottom: 16px">
+          <el-col :span="6">
+            <el-card shadow="hover">
+              <el-statistic title="文档总数" :value="store.docCount" />
+            </el-card>
+          </el-col>
+          <el-col :span="6">
+            <el-card shadow="hover">
+              <el-statistic title="向量分块总数" :value="store.chunkCount" />
+            </el-card>
+          </el-col>
+        </el-row>
+        <div v-if="Object.keys(store.categoryStats).length > 0" style="margin-bottom: 12px">
+          <el-space wrap>
+            <el-tag
+              v-for="(cnt, cat) in store.categoryStats"
+              :key="cat"
+              type="primary"
+            >{{ cat }}: {{ cnt }}</el-tag>
+          </el-space>
+        </div>
+
+        <!-- 工具栏 -->
         <div class="doc-toolbar">
           <el-select v-model="docFilterCategory" placeholder="按分类筛选" clearable style="width: 160px" @change="handleFetchDocuments">
             <el-option label="请假" value="请假" />
@@ -92,7 +116,11 @@
             <el-option label="离职" value="离职" />
             <el-option label="转正" value="转正" />
           </el-select>
-          <el-button type="primary" @click="handleFetchDocuments" style="margin-left: 10px">刷新</el-button>
+          <el-select v-model="docFilterStatus" placeholder="按状态筛选" clearable style="width: 140px; margin-left: 10px" @change="handleFetchDocuments">
+            <el-option label="活跃" value="active" />
+            <el-option label="已删除" value="deleted" />
+          </el-select>
+          <el-button type="primary" @click="handleRefreshDocuments" style="margin-left: 10px">刷新</el-button>
         </div>
 
         <el-table :data="store.documentList" v-loading="store.documentLoading" stripe border style="width: 100%; margin-top: 12px">
@@ -160,58 +188,26 @@
           style="display: none"
           @change="onReingestFileChange"
         />
+
+        <!-- 知识搜索 -->
+        <el-divider />
+        <div class="search-section">
+          <h3>知识搜索</h3>
+          <div class="search-row">
+            <el-input v-model="searchQuery" placeholder="输入搜索内容" style="width: 400px" @keyup.enter="handleSearch" />
+            <span class="topk-label">TopK:</span>
+            <el-input-number v-model="searchTopK" :min="1" :max="20" size="small" />
+            <el-button type="primary" :loading="store.loading" @click="handleSearch" style="margin-left: 10px">搜索</el-button>
+          </div>
+          <div v-if="store.searchResult" class="search-result">
+            <p class="result-meta">命中 {{ store.hitCount }} 条结果</p>
+            <el-card shadow="always" class="result-card">
+              <pre class="result-text">{{ store.searchResult }}</pre>
+            </el-card>
+          </div>
+        </div>
       </el-tab-pane>
     </el-tabs>
-
-    <el-divider />
-
-    <!-- 搜索区域 -->
-    <div class="search-section">
-      <h3>知识搜索</h3>
-      <div class="search-row">
-        <el-input v-model="searchQuery" placeholder="输入搜索内容" style="width: 400px" @keyup.enter="handleSearch" />
-        <span class="topk-label">TopK:</span>
-        <el-input-number v-model="searchTopK" :min="1" :max="20" size="small" />
-        <el-button type="primary" :loading="store.loading" @click="handleSearch" style="margin-left: 10px">搜索</el-button>
-      </div>
-      <div v-if="store.searchResult" class="search-result">
-        <p class="result-meta">命中 {{ store.hitCount }} 条结果</p>
-        <el-card shadow="always" class="result-card">
-          <pre class="result-text">{{ store.searchResult }}</pre>
-        </el-card>
-      </div>
-    </div>
-
-    <el-divider />
-
-    <!-- 统计区域 -->
-    <div class="stats-section">
-      <h3>知识库统计</h3>
-      <el-row :gutter="20">
-        <el-col :span="6">
-          <el-card shadow="hover">
-            <el-statistic title="文档总数" :value="store.docCount" />
-          </el-card>
-        </el-col>
-        <el-col :span="6">
-          <el-card shadow="hover">
-            <el-statistic title="向量分块总数" :value="store.chunkCount" />
-          </el-card>
-        </el-col>
-      </el-row>
-      <div v-if="Object.keys(store.categoryStats).length > 0" style="margin-top: 16px">
-        <h4>分类统计</h4>
-        <el-space wrap>
-          <el-tag
-            v-for="(cnt, cat) in store.categoryStats"
-            :key="cat"
-            type="primary"
-            size="large"
-          >{{ cat }}: {{ cnt }}</el-tag>
-        </el-space>
-      </div>
-      <el-button style="margin-top: 12px" @click="store.fetchStats()">刷新统计</el-button>
-    </div>
   </div>
 </template>
 
@@ -222,7 +218,7 @@ import { useKnowledgeStore } from '@/stores/knowledge-base'
 import type { KnowledgeDocument } from '@/types'
 
 const store = useKnowledgeStore()
-const activeTab = ref('text')
+const activeTab = ref('upload')
 
 // 文本摄入
 const textForm = reactive({ content: '', metadataJson: '' })
@@ -293,13 +289,19 @@ async function handleSearch() {
 
 // 文档管理
 const docFilterCategory = ref('')
+const docFilterStatus = ref('')
 const reingestFileInput = ref<HTMLInputElement>()
 const reingestingDocId = ref<number | null>(null)
 
 async function handleFetchDocuments() {
   await store.fetchDocuments({
-    category: docFilterCategory.value || undefined
+    category: docFilterCategory.value || undefined,
+    status: docFilterStatus.value || undefined
   })
+}
+
+async function handleRefreshDocuments() {
+  await Promise.all([store.fetchStats(), handleFetchDocuments()])
 }
 
 function handleReingest(row: KnowledgeDocument) {
@@ -347,7 +349,7 @@ function formatFileSize(bytes: number): string {
 
 onMounted(() => {
   store.fetchStats()
-  store.fetchDocuments()
+  store.fetchDocuments({ status: docFilterStatus.value || undefined })
 })
 </script>
 

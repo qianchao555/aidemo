@@ -43,6 +43,19 @@
         ORDER BY update_time DESC
     </select>
 
+    <select id="findByFilters" resultMap="KnowledgeDocumentResult">
+        SELECT * FROM knowledge_document
+        <where>
+            <if test="category != null and category != ''">
+                AND category = #{category}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+        </where>
+        ORDER BY update_time DESC
+    </select>
+
     <update id="update" parameterType="com.xiaofuzi.ai.entity.KnowledgeDocument">
         UPDATE knowledge_document
         SET document_name = #{documentName},

@@ -14,6 +14,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.xiaofuzi.ai.entity.KnowledgeDocument;
 import com.xiaofuzi.ai.mapper.KnowledgeDocumentMapper;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -31,6 +33,8 @@ public class KnowledgeBaseService {
     private final VectorStore vectorStore;
     private final DocumentParserFactory parserFactory;
     private final KnowledgeDocumentMapper documentMapper;
+    private final JdbcTemplate vectorJdbcTemplate;
+    private final String schemaName;
     private final String vectorTableName;
 
     private final TokenTextSplitter textSplitter = TokenTextSplitter.builder()
@@ -38,11 +42,19 @@ public class KnowledgeBaseService {
 
     public KnowledgeBaseService(VectorStore vectorStore, DocumentParserFactory parserFactory,
             KnowledgeDocumentMapper documentMapper,
+            @Qualifier("vectorJdbcTemplate") JdbcTemplate vectorJdbcTemplate,
+            @Value("${spring.ai.vectorstore.pgvector.schema-name}") String schemaName,
             @Value("${spring.ai.vectorstore.pgvector.table-name}") String vectorTableName) {
         this.vectorStore = vectorStore;
         this.parserFactory = parserFactory;
         this.documentMapper = documentMapper;
+        this.vectorJdbcTemplate = vectorJdbcTemplate;
+        this.schemaName = schemaName;
         this.vectorTableName = vectorTableName;
+    }
+
+    private String qualifiedTable() {
+        return schemaName + "." + vectorTableName;
     }
 
     public void ingestMultipartFile(MultipartFile file, String parserCategory,
@@ -75,7 +87,7 @@ public class KnowledgeBaseService {
             sharedMeta.put("source", fileName);
             sharedMeta.put("file_type", getFileExtension(fileName));
             sharedMeta.put("document_id", doc.getId().toString());
-            ingestParsedDocuments(parsedDocs, sharedMeta);
+            ingestParsedDocuments(parsedDocs, sharedMeta, doc.getId());
 
             doc.setChunkCount(countChunksInLastIngest(parsedDocs));
             documentMapper.update(doc);
@@ -102,7 +114,8 @@ public class KnowledgeBaseService {
         return count;
     }
 
-    public void ingestParsedDocuments(List<Document> parsedDocs, Map<String, Object> sharedMeta) {
+    public void ingestParsedDocuments(List<Document> parsedDocs, Map<String, Object> sharedMeta,
+            Long documentId) {
         List<Document> allChunks = new ArrayList<>();
 
         for (Document parsedDoc : parsedDocs) {
@@ -136,19 +149,28 @@ public class KnowledgeBaseService {
             }
         }
 
-        batchAdd(allChunks);
+        batchAdd(allChunks, documentId);
         logger.info("文档导入完成: {} 个解析单元 -> {} 个向量分块", parsedDocs.size(), allChunks.size());
     }
 
-    private void batchAdd(List<Document> documents) {
+    private void batchAdd(List<Document> documents, Long documentId) {
         if (documents == null || documents.isEmpty()) {
             return;
         }
+
         for (int i = 0; i < documents.size(); i += EMBEDDING_BATCH_SIZE) {
             int end = Math.min(i + EMBEDDING_BATCH_SIZE, documents.size());
             List<Document> batch = documents.subList(i, end);
             vectorStore.add(batch);
             logger.debug("向量入库批次: {}-{}/{}", i, end, documents.size());
+        }
+
+        if (documentId != null) {
+            String docIdStr = documentId.toString();
+            String sql = String.format(
+                    "UPDATE %s SET document_id = ? WHERE metadata->>'document_id' = ? AND document_id IS NULL",
+                    qualifiedTable());
+            vectorJdbcTemplate.update(sql, documentId, docIdStr);
         }
     }
 
@@ -248,9 +270,9 @@ public class KnowledgeBaseService {
 
     public void deleteByDocumentId(Long documentId) {
         try {
-            logger.info("标记删除向量: document_id={}, table={}", documentId, vectorTableName);
-            // 通过 VectorStore 的 delete(filter) 按 document_id 删除
-            // 如果 VectorStore 不支持 filter delete，则用备选 JdbcTemplate 方案
+            String sql = String.format("DELETE FROM %s WHERE document_id = ?", qualifiedTable());
+            int deleted = vectorJdbcTemplate.update(sql, documentId);
+            logger.info("删除向量: document_id={}, table={}, 删除 {} 行", documentId, vectorTableName, deleted);
         } catch (Exception e) {
             logger.error("删除向量失败: document_id={}", documentId, e);
             throw new RuntimeException("删除向量失败: " + e.getMessage(), e);
@@ -276,7 +298,7 @@ public class KnowledgeBaseService {
             Map<String, Object> sharedMeta = new HashMap<>();
             sharedMeta.put("source", fileName);
             sharedMeta.put("document_id", documentId.toString());
-            int chunkCount = ingestParsedDocumentsCount(parsedDocs, sharedMeta);
+            int chunkCount = ingestParsedDocumentsCount(parsedDocs, sharedMeta, documentId);
 
             logger.info("文档重摄入完成: id={}, fileName={}, chunks={}", documentId, fileName, chunkCount);
             return chunkCount;
@@ -286,7 +308,8 @@ public class KnowledgeBaseService {
         }
     }
 
-    public int ingestParsedDocumentsCount(List<Document> parsedDocs, Map<String, Object> sharedMeta) {
+    public int ingestParsedDocumentsCount(List<Document> parsedDocs, Map<String, Object> sharedMeta,
+            Long documentId) {
         List<Document> allChunks = new ArrayList<>();
         for (Document parsedDoc : parsedDocs) {
             Map<String, Object> mergedMeta = new HashMap<>(sharedMeta);
@@ -312,7 +335,7 @@ public class KnowledgeBaseService {
                 allChunks.addAll(chunks);
             }
         }
-        batchAdd(allChunks);
+        batchAdd(allChunks, documentId);
         logger.info("文档解析并入库: {} 个解析单元 -> {} 个向量分块", parsedDocs.size(), allChunks.size());
         return allChunks.size();
     }

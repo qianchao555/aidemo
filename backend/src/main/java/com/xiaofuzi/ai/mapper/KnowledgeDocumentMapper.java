@@ -18,6 +18,9 @@ public interface KnowledgeDocumentMapper {
 
     List<KnowledgeDocument> findByCategory(@Param("category") String category);
 
+    List<KnowledgeDocument> findByFilters(@Param("category") String category,
+                                          @Param("status") String status);
+
     void update(KnowledgeDocument doc);
 
     void softDelete(@Param("id") Long id);

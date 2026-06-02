@@ -63,3 +63,10 @@ CREATE TABLE IF NOT EXISTS knowledge_document (
 
 CREATE INDEX IF NOT EXISTS idx_kd_status ON knowledge_document(status);
 CREATE INDEX IF NOT EXISTS idx_kd_category ON knowledge_document(category);
+
+-- 向量表与文档表关联：增加 document_id 列
+ALTER TABLE xiaofuzi_knowledge_base_v2
+ADD COLUMN IF NOT EXISTS document_id BIGINT;
+
+CREATE INDEX IF NOT EXISTS idx_vector_document_id
+ON xiaofuzi_knowledge_base_v2(document_id);

@@ -166,7 +166,7 @@ public class FaqService {
 
             String text = "【FAQ】" + entry.getQuestion() + "\n" + entry.getAnswer();
             Document doc = new Document(text, metadata);
-            knowledgeBaseService.ingestParsedDocuments(List.of(doc), Map.of());
+            knowledgeBaseService.ingestParsedDocuments(List.of(doc), Map.of(), null);
             logger.info("FAQ 同步到向量库(增量): id={}", entry.getId());
         } catch (Exception e) {
             logger.warn("FAQ 同步向量库失败: id={}", entry.getId(), e);

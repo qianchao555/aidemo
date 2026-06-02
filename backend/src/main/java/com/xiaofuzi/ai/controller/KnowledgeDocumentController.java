@@ -35,12 +35,7 @@ public class KnowledgeDocumentController {
     public Result<List<KnowledgeDocument>> listDocuments(
             @RequestParam(required = false) String category,
             @RequestParam(required = false, defaultValue = "active") String status) {
-        List<KnowledgeDocument> list;
-        if (category != null && !category.isBlank()) {
-            list = documentMapper.findByCategory(category);
-        } else {
-            list = documentMapper.findAllActive();
-        }
+        List<KnowledgeDocument> list = documentMapper.findByFilters(category, status);
         return Result.success(list);
     }
 
