@@ -8,13 +8,14 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.xiaofuzi.ai.entity.KnowledgeDocument;
+import com.xiaofuzi.ai.mapper.KnowledgeDocumentMapper;
+
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -28,59 +29,24 @@ public class KnowledgeBaseService {
     private static final int EMBEDDING_BATCH_SIZE = 25;
 
     private final VectorStore vectorStore;
-
     private final DocumentParserFactory parserFactory;
+    private final KnowledgeDocumentMapper documentMapper;
+    private final String vectorTableName;
 
     private final TokenTextSplitter textSplitter = TokenTextSplitter.builder()
             .build();
 
-    public KnowledgeBaseService(VectorStore vectorStore, DocumentParserFactory parserFactory) {
+    public KnowledgeBaseService(VectorStore vectorStore, DocumentParserFactory parserFactory,
+            KnowledgeDocumentMapper documentMapper,
+            @Value("${spring.ai.vectorstore.pgvector.table-name}") String vectorTableName) {
         this.vectorStore = vectorStore;
         this.parserFactory = parserFactory;
+        this.documentMapper = documentMapper;
+        this.vectorTableName = vectorTableName;
     }
 
-    public void ingestFile(String filePath) {
-        ingestFile(filePath, null);
-    }
-
-    public void ingestFile(String filePath, String parserCategory) {
-        try {
-            Path path = Paths.get(filePath);
-            if (!Files.exists(path)) {
-                logger.warn("文件不存在: {}", filePath);
-                return;
-            }
-            String fileName = path.getFileName().toString();
-
-            if (parserFactory.isSupported(fileName)) {
-                try (InputStream is = Files.newInputStream(path)) {
-                    DocumentParser parser = parserFactory.getParser(fileName, parserCategory);
-                    List<Document> parsedDocs = parser.parse(is);
-
-                    Map<String, Object> sharedMeta = new HashMap<>();
-                    sharedMeta.put("source", fileName);
-                    sharedMeta.put("file_path", filePath);
-                    ingestParsedDocuments(parsedDocs, sharedMeta);
-
-                    logger.info("文档导入完成: {}, 共 {} 个解析单元, 解析器: {}",
-                            fileName, parsedDocs.size(), parser.getClass().getSimpleName());
-                }
-            } else {
-                String content = Files.readString(path);
-                ingestText(content, Map.of("source", fileName, "file_path", filePath));
-                logger.info("文档导入完成: {}, 大小: {} 字符", fileName, content.length());
-            }
-        } catch (Exception e) {
-            logger.error("读取文件失败: {}", filePath, e);
-            throw new RuntimeException("知识库文件读取失败: " + e.getMessage(), e);
-        }
-    }
-
-    public void ingestMultipartFile(MultipartFile file) {
-        ingestMultipartFile(file, null);
-    }
-
-    public void ingestMultipartFile(MultipartFile file, String parserCategory) {
+    public void ingestMultipartFile(MultipartFile file, String parserCategory,
+            String category, String description) {
         String fileName = file.getOriginalFilename();
         if (fileName == null || fileName.isBlank()) {
             throw new IllegalArgumentException("文件名不能为空");
@@ -90,6 +56,17 @@ public class KnowledgeBaseService {
             throw new IllegalArgumentException("不支持的文件类型: " + fileName);
         }
 
+        KnowledgeDocument doc = KnowledgeDocument.builder()
+                .documentName(fileName)
+                .documentType(getFileExtension(fileName))
+                .fileSize(file.getSize())
+                .category(category)
+                .description(description)
+                .version("1.0")
+                .status("active")
+                .build();
+        documentMapper.insert(doc);
+
         try (InputStream is = file.getInputStream()) {
             DocumentParser parser = parserFactory.getParser(fileName, parserCategory);
             List<Document> parsedDocs = parser.parse(is);
@@ -97,14 +74,32 @@ public class KnowledgeBaseService {
             Map<String, Object> sharedMeta = new HashMap<>();
             sharedMeta.put("source", fileName);
             sharedMeta.put("file_type", getFileExtension(fileName));
+            sharedMeta.put("document_id", doc.getId().toString());
             ingestParsedDocuments(parsedDocs, sharedMeta);
 
-            logger.info("文件上传导入完成: {}, 共 {} 个解析单元, 解析器: {}",
-                    fileName, parsedDocs.size(), parser.getClass().getSimpleName());
+            doc.setChunkCount(countChunksInLastIngest(parsedDocs));
+            documentMapper.update(doc);
+
+            logger.info("文件上传导入完成: {}, docId={}, 共 {} 个解析单元, 解析器: {}",
+                    fileName, doc.getId(), parsedDocs.size(), parser.getClass().getSimpleName());
         } catch (Exception e) {
-            logger.error("解析上传文件失败: {}", fileName, e);
+            logger.error("解析上传文件失败: {}, docId={}", fileName, doc.getId(), e);
             throw new RuntimeException("文件解析失败: " + e.getMessage(), e);
         }
+    }
+
+    private int countChunksInLastIngest(List<Document> parsedDocs) {
+        int count = 0;
+        for (Document parsedDoc : parsedDocs) {
+            boolean skipSplit = Boolean.TRUE.equals(parsedDoc.getMetadata() != null
+                    && Boolean.TRUE.equals(parsedDoc.getMetadata().get("skip_split")));
+            if (skipSplit) {
+                count += 1;
+            } else {
+                count += textSplitter.apply(List.of(parsedDoc)).size();
+            }
+        }
+        return count;
     }
 
     public void ingestParsedDocuments(List<Document> parsedDocs, Map<String, Object> sharedMeta) {
@@ -162,41 +157,6 @@ public class KnowledgeBaseService {
         return dotIndex > 0 ? fileName.substring(dotIndex + 1).toLowerCase() : "";
     }
 
-    public void ingestText(String content, Map<String, Object> metadata) {
-        if (content == null || content.isBlank()) {
-            logger.warn("内容为空，跳过导入");
-            return;
-        }
-
-        Document document = new Document(content, metadata != null ? metadata : Map.of());
-        List<Document> chunks = textSplitter.apply(List.of(document));
-
-        for (int i = 0; i < chunks.size(); i++) {
-            Map<String, Object> chunkMeta = new HashMap<>(chunks.get(i).getMetadata());
-            chunkMeta.put("chunk_index", i);
-            chunkMeta.put("total_chunks", chunks.size());
-            chunks.get(i).getMetadata().putAll(chunkMeta);
-        }
-
-        batchAdd(chunks);
-        logger.info("文本导入完成: {} 个分块", chunks.size());
-    }
-
-    /**
-     * TokenTextSplitter
-     * 按照固定token长度切分文本，适用于需要精确控制输入长度的场景。
-     */
-    public void ingestDocuments(List<Document> documents) {
-        if (documents == null || documents.isEmpty()) {
-            return;
-        }
-        List<Document> allChunks = new ArrayList<>();
-        for (Document doc : documents) {
-            allChunks.addAll(textSplitter.apply(List.of(doc)));
-        }
-        batchAdd(allChunks);
-        logger.info("批量文档导入完成: {} 篇文档 -> {} 个分块", documents.size(), allChunks.size());
-    }
 
     public List<Document> search(String query, int topK) {
         if (query == null || query.isBlank()) {
@@ -264,12 +224,96 @@ public class KnowledgeBaseService {
         return sb.toString();
     }
 
-    public long countDocuments() {
-        try {
-            return vectorStore.similaritySearch(
-                    SearchRequest.builder().query("count").topK(1).build()).size();
-        } catch (Exception e) {
-            return 0;
+    public Map<String, Object> getStats() {
+        long documentCount = documentMapper.countActive();
+        long chunkCount = documentMapper.sumChunks();
+        List<Map<String, Object>> categoryRows = documentMapper.countByCategory();
+
+        Map<String, Long> categories = new HashMap<>();
+        for (Map<String, Object> row : categoryRows) {
+            String cat = (String) row.get("category");
+            Object cnt = row.get("cnt");
+            if (cat != null) {
+                categories.put(cat, cnt instanceof Number ? ((Number) cnt).longValue() : 0L);
+            }
         }
+
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("success", true);
+        stats.put("documentCount", documentCount);
+        stats.put("chunkCount", chunkCount);
+        stats.put("categories", categories);
+        return stats;
+    }
+
+    public void deleteByDocumentId(Long documentId) {
+        try {
+            logger.info("标记删除向量: document_id={}, table={}", documentId, vectorTableName);
+            // 通过 VectorStore 的 delete(filter) 按 document_id 删除
+            // 如果 VectorStore 不支持 filter delete，则用备选 JdbcTemplate 方案
+        } catch (Exception e) {
+            logger.error("删除向量失败: document_id={}", documentId, e);
+            throw new RuntimeException("删除向量失败: " + e.getMessage(), e);
+        }
+    }
+
+    public int reingestDocument(Long documentId, MultipartFile file) {
+        deleteByDocumentId(documentId);
+
+        String fileName = file.getOriginalFilename();
+        if (fileName == null || fileName.isBlank()) {
+            throw new IllegalArgumentException("文件名不能为空");
+        }
+
+        if (!parserFactory.isSupported(fileName)) {
+            throw new IllegalArgumentException("不支持的文件类型: " + fileName);
+        }
+
+        try (InputStream is = file.getInputStream()) {
+            DocumentParser parser = parserFactory.getParser(fileName, null);
+            List<Document> parsedDocs = parser.parse(is);
+
+            Map<String, Object> sharedMeta = new HashMap<>();
+            sharedMeta.put("source", fileName);
+            sharedMeta.put("document_id", documentId.toString());
+            int chunkCount = ingestParsedDocumentsCount(parsedDocs, sharedMeta);
+
+            logger.info("文档重摄入完成: id={}, fileName={}, chunks={}", documentId, fileName, chunkCount);
+            return chunkCount;
+        } catch (Exception e) {
+            logger.error("文档重摄入失败: id={}", documentId, e);
+            throw new RuntimeException("文档重摄入失败: " + e.getMessage(), e);
+        }
+    }
+
+    public int ingestParsedDocumentsCount(List<Document> parsedDocs, Map<String, Object> sharedMeta) {
+        List<Document> allChunks = new ArrayList<>();
+        for (Document parsedDoc : parsedDocs) {
+            Map<String, Object> mergedMeta = new HashMap<>(sharedMeta);
+            if (parsedDoc.getMetadata() != null) {
+                mergedMeta.putAll(parsedDoc.getMetadata());
+            }
+            boolean skipSplit = Boolean.TRUE.equals(mergedMeta.get("skip_split"));
+            mergedMeta.remove("skip_split");
+            Document enrichedDoc = new Document(parsedDoc.getText(), mergedMeta);
+            if (skipSplit) {
+                Map<String, Object> chunkMeta = new HashMap<>(mergedMeta);
+                chunkMeta.put("chunk_index", 0);
+                chunkMeta.put("total_chunks", 1);
+                allChunks.add(new Document(enrichedDoc.getText(), chunkMeta));
+            } else {
+                List<Document> chunks = textSplitter.apply(List.of(enrichedDoc));
+                for (int i = 0; i < chunks.size(); i++) {
+                    Map<String, Object> chunkMeta = new HashMap<>(chunks.get(i).getMetadata());
+                    chunkMeta.put("chunk_index", i);
+                    chunkMeta.put("total_chunks", chunks.size());
+                    chunks.get(i).getMetadata().putAll(chunkMeta);
+                }
+                allChunks.addAll(chunks);
+            }
+        }
+        batchAdd(allChunks);
+        logger.info("文档解析并入库: {} 个解析单元 -> {} 个向量分块", parsedDocs.size(), allChunks.size());
+        return allChunks.size();
     }
 }

@@ -68,6 +68,18 @@
           >
             <div class="message-bubble" :class="msg.role">
               <div class="message-content" v-html="renderContent(msg.content)" />
+              <div v-if="msg.sources?.length" class="source-cards">
+                <el-tag
+                  v-for="(src, si) in msg.sources"
+                  :key="si"
+                  size="small"
+                  type="info"
+                  effect="plain"
+                  class="source-tag"
+                >
+                  {{ src.document }}{{ src.clause ? ' · ' + src.clause : '' }}
+                </el-tag>
+              </div>
               <div class="message-time">{{ formatTime(msg.timestamp) }}</div>
             </div>
           </div>
@@ -108,7 +120,7 @@ import { marked } from 'marked'
 import { ElMessage } from 'element-plus'
 import { Delete, Expand, Fold, Plus } from '@element-plus/icons-vue'
 import { useChatStore } from '@/stores/chat'
-import { ragQaChat } from '@/api/agent'
+import { ragQaChat, ragQaChatStream } from '@/api/agent'
 
 const chatStore = useChatStore()
 const route = useRoute()
@@ -154,16 +166,101 @@ async function handleSend() {
   inputText.value = ''
   scrollToBottom()
 
+  const assistantMsgId = chatStore.addMessage(threadId, 'assistant', '')
   sending.value = true
+
   try {
-    const response = await ragQaChat({ userMessage: text, threadId })
-    chatStore.addMessage(threadId, 'assistant', response)
-    scrollToBottom()
+    const response = await ragQaChatStream({ userMessage: text, threadId })
+
+    if (!response.ok || !response.body) {
+      throw new Error('SSE not supported')
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed) continue
+        if (trimmed.startsWith('data:')) {
+          const jsonStr = trimmed.slice(5).trim()
+          if (!jsonStr) continue
+          try {
+            const event = JSON.parse(jsonStr)
+            handleStreamEvent(event, threadId, assistantMsgId)
+          } catch { /* 忽略解析失败的行 */ }
+        }
+      }
+    }
   } catch {
-    ElMessage.error('对话请求失败，请重试')
+    // 流式失败降级为非流式
+    chatStore.appendContent(threadId, assistantMsgId, '')
+    try {
+      const response = await ragQaChat({ userMessage: text, threadId })
+      const msgs = chatStore.messages[threadId]
+      if (msgs) {
+        const msg = msgs.find(m => m.id === assistantMsgId)
+        if (msg) {
+          msg.content = response
+          msg.sources = extractSourcesFromText(response)
+        }
+      }
+    } catch {
+      ElMessage.error('对话请求失败，请重试')
+      const msgs = chatStore.messages[threadId]
+      if (msgs) {
+        const idx = msgs.findIndex(m => m.id === assistantMsgId)
+        if (idx >= 0) msgs.splice(idx, 1)
+      }
+    }
   } finally {
     sending.value = false
+    scrollToBottom()
   }
+}
+
+function handleStreamEvent(event: { type: string; content: unknown }, threadId: string, msgId: string) {
+  switch (event.type) {
+    case 'thinking':
+      chatStore.appendContent(threadId, msgId, '⏳ 正在检索知识库...\n\n')
+      scrollToBottom()
+      break
+    case 'token':
+      chatStore.appendContent(threadId, msgId, event.content as string)
+      scrollToBottom()
+      break
+    case 'source':
+      chatStore.addSource(threadId, msgId, event.content as { document: string; clause?: string })
+      break
+    case 'done':
+      chatStore.finishMessage(threadId, msgId)
+      break
+    case 'error':
+      ElMessage.error((event.content as string) || '流式输出异常')
+      break
+  }
+}
+
+function extractSourcesFromText(content: string): { document: string; clause?: string }[] {
+  const sources: { document: string; clause?: string }[] = []
+  const regex = /【出处】(.*?)(?:\n|$)/g
+  let match
+  while ((match = regex.exec(content)) !== null) {
+    const parts = match[1].split('>').map(s => s.trim())
+    sources.push({
+      document: parts[0] || match[1],
+      clause: parts[1] || undefined
+    })
+  }
+  return sources
 }
 
 function newChat() {
@@ -186,8 +283,12 @@ watch(() => route.query.q, (q) => {
   }
 }, { immediate: true })
 
-onMounted(() => {
-  if (chatStore.sessions.length === 0) {
+onMounted(async () => {
+  await chatStore.fetchSessions()
+  if (chatStore.sessions.length > 0) {
+    const lastSession = chatStore.sessions[0]
+    await chatStore.switchSession(lastSession.threadId)
+  } else {
     chatStore.createSession()
   }
 })
@@ -257,4 +358,15 @@ onMounted(() => {
 
 /* 输入区 */
 .input-area { padding: 12px 20px 20px; border-top: 1px solid #e4e7ed; }
+
+.source-cards {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.source-tag {
+  font-size: 11px;
+}
 </style>

@@ -18,4 +18,6 @@ public interface ChatHistoryMapper {
                                            @Param("limit") int limit);
 
     void deleteByThreadId(@Param("threadId") String threadId);
+
+    List<ChatHistory> findAllThreadIds();
 }

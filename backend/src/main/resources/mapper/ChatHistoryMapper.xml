@@ -36,4 +36,9 @@
         DELETE FROM chat_history WHERE thread_id = #{threadId}
     </delete>
 
+    <select id="findAllThreadIds" resultMap="ChatHistoryResult">
+        SELECT DISTINCT ON (thread_id) * FROM chat_history
+        ORDER BY thread_id, create_time DESC
+    </select>
+
 </mapper>

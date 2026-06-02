@@ -1,6 +1,8 @@
 package com.xiaofuzi.ai;
 
 import com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeChatAutoConfiguration;
+import org.apache.ibatis.annotations.Mapper;
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.ai.mcp.client.common.autoconfigure.McpClientAutoConfiguration;
 import org.springframework.ai.mcp.client.common.autoconfigure.McpToolCallbackAutoConfiguration;
 import org.springframework.ai.mcp.client.common.autoconfigure.StdioTransportAutoConfiguration;
@@ -14,6 +16,7 @@ import org.springframework.context.annotation.ComponentScan;
 
 @SpringBootApplication
 @ComponentScan("com.xiaofuzi.ai")
+@MapperScan(basePackages = "com.xiaofuzi.ai.mapper")
 @EnableAutoConfiguration(exclude = {
 
         DashScopeChatAutoConfiguration.class,

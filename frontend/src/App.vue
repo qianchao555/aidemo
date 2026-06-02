@@ -1,7 +1,7 @@
 <template>
   <el-container class="app-container">
     <el-aside width="220px" class="app-sidebar">
-      <div class="logo">AI Console</div>
+      <div class="logo">制度知识库问答与流程指引助手</div>
       <el-menu
         :default-active="activeMenu"
         router

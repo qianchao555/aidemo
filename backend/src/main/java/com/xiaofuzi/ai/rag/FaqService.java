@@ -6,6 +6,7 @@ import com.xiaofuzi.ai.dto.FaqMatchResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
@@ -20,10 +21,13 @@ public class FaqService {
 
     private final FaqEntryMapper faqEntryMapper;
     private final KnowledgeBaseService knowledgeBaseService;
+    private final VectorStore vectorStore;
 
-    public FaqService(FaqEntryMapper faqEntryMapper, KnowledgeBaseService knowledgeBaseService) {
+    public FaqService(FaqEntryMapper faqEntryMapper, KnowledgeBaseService knowledgeBaseService,
+                      VectorStore vectorStore) {
         this.faqEntryMapper = faqEntryMapper;
         this.knowledgeBaseService = knowledgeBaseService;
+        this.vectorStore = vectorStore;
     }
 
     public FaqMatchResult match(String userQuery) {
@@ -145,6 +149,13 @@ public class FaqService {
     //FAQ问题和答案同步到向量数据库，形成可检索的知识库，提升RAG系统的问答能力
     private void syncToVectorStore(FaqEntry entry) {
         try {
+            // 如果是更新（id 已存在），先按 faq_id 删除旧向量
+            String faqIdStr = String.valueOf(entry.getId());
+            vectorStore.delete(
+                "faq_id == '" + faqIdStr + "' AND content_type == 'faq_entry'"
+            );
+
+            // 写入新向量
             Map<String, Object> metadata = new HashMap<>();
             metadata.put("content_type", "faq_entry");
             metadata.put("faq_id", entry.getId());
@@ -156,7 +167,7 @@ public class FaqService {
             String text = "【FAQ】" + entry.getQuestion() + "\n" + entry.getAnswer();
             Document doc = new Document(text, metadata);
             knowledgeBaseService.ingestParsedDocuments(List.of(doc), Map.of());
-            logger.info("FAQ 同步到向量库: id={}", entry.getId());
+            logger.info("FAQ 同步到向量库(增量): id={}", entry.getId());
         } catch (Exception e) {
             logger.warn("FAQ 同步向量库失败: id={}", entry.getId(), e);
         }
