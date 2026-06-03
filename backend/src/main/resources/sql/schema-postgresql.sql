@@ -1,3 +1,6 @@
+-- 启用 pg_trgm 扩展（三元组模糊匹配，用于关键词检索）
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 CREATE TABLE public.xiaofuzi_knowledge_base2 (
                                                  id uuid DEFAULT uuid_generate_v4() NOT NULL,
                                                  "content" text NULL,
@@ -77,6 +80,10 @@ ADD COLUMN IF NOT EXISTS document_id BIGINT;
 
 CREATE INDEX IF NOT EXISTS idx_vector_document_id
 ON xiaofuzi_knowledge_base_v2(document_id);
+
+-- 三元组索引，用于关键词模糊匹配（中文适用，按字符三元组切分）
+CREATE INDEX IF NOT EXISTS idx_vector_content_trgm
+ON xiaofuzi_knowledge_base_v2 USING gin (content gin_trgm_ops);
 
 -- 会话列表管理表
 CREATE TABLE IF NOT EXISTS chat_session (

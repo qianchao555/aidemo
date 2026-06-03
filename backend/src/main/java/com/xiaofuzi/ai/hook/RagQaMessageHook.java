@@ -76,9 +76,19 @@ public class RagQaMessageHook extends MessagesModelHook {
     private final KnowledgeBaseService knowledgeBaseService;
     private final FaqService faqService;
 
+    /** 存储最近一次检索的元信息，供 SSE 控制器读取并推送给前端展示 */
+    private final ThreadLocal<Map<String, Object>> lastSearchInfo = new ThreadLocal<>();
+
     public RagQaMessageHook(KnowledgeBaseService knowledgeBaseService, FaqService faqService) {
         this.knowledgeBaseService = knowledgeBaseService;
         this.faqService = faqService;
+    }
+
+    /** SSE 控制器在 ask() 完成后调用，获取本次检索的元信息推送给前端 */
+    public Map<String, Object> getLastSearchInfo() {
+        Map<String, Object> info = lastSearchInfo.get();
+        lastSearchInfo.remove();
+        return info;
     }
 
     @Override
@@ -128,19 +138,27 @@ public class RagQaMessageHook extends MessagesModelHook {
     //带阈值的RAG检索，适用于明确了意图但需要控制相关性要求的场景
     private static final double DEFAULT_SIMILARITY_THRESHOLD = 0.5;
 
+    @SuppressWarnings("unchecked")
     private AgentCommand handleFallback(List<Message> previousMessages, String userQuery) {
-        List<Document> relevantDocs = knowledgeBaseService.searchWithThreshold(
+        Map<String, Object> hybridResult = knowledgeBaseService.hybridSearch(
                 userQuery, 5, DEFAULT_SIMILARITY_THRESHOLD);
+        List<Document> relevantDocs = (List<Document>) hybridResult.get("documents");
+
+        // 存储检索元信息，供 SSE 控制器推送给前端
+        Map<String, Object> info = new java.util.HashMap<>(hybridResult);
+        info.remove("documents");
+        info.put("searchMode", "hybrid");
+        lastSearchInfo.set(info);
 
         List<Message> enriched = new ArrayList<>(previousMessages);
 
         if (relevantDocs.isEmpty()) {
-            String prompt = "【重要】已检索内部知识库，未找到相关文档。"
+            String prompt = "【重要】已检索内部知识库（混合检索模式），未找到相关文档。"
                     + "请告知用户：'抱歉，在内部知识库中未搜索到与您问题相关的信息。"
                     + "建议联系 HR 或行政部门获取帮助。'"
                     + "严禁使用训练数据或外部知识编造回答。";
             enriched.add(new SystemMessage(prompt));
-            logger.info("RAG QA Hook: 兜底检索未命中");
+            logger.info("RAG QA Hook: 兜底混合检索未命中");
         } else {
             String knowledgeContext = knowledgeBaseService.formatAsContext(relevantDocs, 3000);
             String prompt = knowledgeContext
@@ -150,27 +168,38 @@ public class RagQaMessageHook extends MessagesModelHook {
                     + "3. 如果参考资料不足以回答用户问题，请如实说明\n"
                     + "4. 不要添加知识库中没有的信息，不要编造，不要猜测";
             enriched.add(new SystemMessage(prompt));
-            logger.info("RAG QA Hook: 兜底检索命中 {} 条", relevantDocs.size());
+            logger.info("RAG QA Hook: 兜底混合检索 | 向量{} + 关键词{} → 融合后{}",
+                    hybridResult.get("vectorCount"), hybridResult.get("keywordCount"),
+                    hybridResult.get("mergedCount"));
         }
 
         return new AgentCommand(enriched);
     }
 
+    @SuppressWarnings("unchecked")
     private AgentCommand handleAnswerable(List<Message> previousMessages,
                                           String userQuery, IntentType intent) {
         double threshold = intent.getThreshold() > 0 ? intent.getThreshold() : DEFAULT_SIMILARITY_THRESHOLD;
-        List<Document> relevantDocs = knowledgeBaseService.searchWithThreshold(
+        Map<String, Object> hybridResult = knowledgeBaseService.hybridSearch(
                 userQuery, intent.getTopK(), threshold);
+        List<Document> relevantDocs = (List<Document>) hybridResult.get("documents");
+
+        // 存储检索元信息，供 SSE 控制器推送给前端
+        Map<String, Object> info = new java.util.HashMap<>(hybridResult);
+        info.remove("documents");
+        info.put("searchMode", "hybrid");
+        info.put("intent", intent.getDisplayName());
+        lastSearchInfo.set(info);
 
         List<Message> enriched = new ArrayList<>(previousMessages);
 
         if (relevantDocs.isEmpty()) {
             String prompt = "【重要】已检索内部知识库（意图：" + intent.getDisplayName()
-                    + "），未找到相关文档。"
+                    + "，混合检索模式），未找到相关文档。"
                     + "请直接告知用户：'抱歉，在内部知识库中未搜索到与您问题相关的文档，无法提供答案。'"
                     + "严禁使用训练数据或外部知识编造回答。";
             enriched.add(new SystemMessage(prompt));
-            logger.info("RAG QA Hook: 意图={} 未命中", intent.getDisplayName());
+            logger.info("RAG QA Hook: 意图={} 混合检索未命中", intent.getDisplayName());
         } else {
             String knowledgeContext = knowledgeBaseService.formatAsContext(relevantDocs, 3000);
             String template = ANSWER_TEMPLATES.getOrDefault(intent, "");
@@ -182,8 +211,9 @@ public class RagQaMessageHook extends MessagesModelHook {
                     + "4. 不要添加知识库中没有的信息，不要编造，不要猜测"
                     + template;
             enriched.add(new SystemMessage(prompt));
-            logger.info("RAG QA Hook: 意图={} 命中 {} 条 topK={}",
-                    intent.getDisplayName(), relevantDocs.size(), intent.getTopK());
+            logger.info("RAG QA Hook: 意图={} 混合检索 | 向量{} + 关键词{} → 融合后{}",
+                    intent.getDisplayName(), hybridResult.get("vectorCount"),
+                    hybridResult.get("keywordCount"), hybridResult.get("mergedCount"));
         }
 
         return new AgentCommand(enriched);

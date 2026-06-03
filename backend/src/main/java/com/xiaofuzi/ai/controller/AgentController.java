@@ -7,6 +7,7 @@ import com.xiaofuzi.ai.entity.ChatHistory;
 import com.xiaofuzi.ai.entity.ChatSession;
 import com.xiaofuzi.ai.entity.ChatUser;
 import com.xiaofuzi.ai.mapper.ChatHistoryMapper;
+import com.xiaofuzi.ai.hook.RagQaMessageHook;
 import com.xiaofuzi.ai.mapper.ChatSessionMapper;
 import com.xiaofuzi.ai.mapper.ChatUserMapper;
 import com.xiaofuzi.ai.service.RagQaAgentService;
@@ -35,6 +36,7 @@ public class AgentController {
     private final ChatHistoryMapper chatHistoryMapper;
     private final ChatSessionMapper chatSessionMapper;
     private final ChatUserMapper chatUserMapper;
+    private final RagQaMessageHook ragQaMessageHook;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ExecutorService sseExecutor = Executors.newCachedThreadPool();
@@ -42,11 +44,13 @@ public class AgentController {
     public AgentController(RagQaAgentService ragQaAgentService,
                            ChatHistoryMapper chatHistoryMapper,
                            ChatSessionMapper chatSessionMapper,
-                           ChatUserMapper chatUserMapper) {
+                           ChatUserMapper chatUserMapper,
+                           RagQaMessageHook ragQaMessageHook) {
         this.ragQaAgentService = ragQaAgentService;
         this.chatHistoryMapper = chatHistoryMapper;
         this.chatSessionMapper = chatSessionMapper;
         this.chatUserMapper = chatUserMapper;
+        this.ragQaMessageHook = ragQaMessageHook;
     }
 
     @PostMapping("/rag-qa/chat")
@@ -78,6 +82,14 @@ public class AgentController {
                 emitter.send(SseEmitter.event().name("thinking").data(thinkingJson));
 
                 String response = ragQaAgentService.ask(finalThreadId, finalUserId, userMessage);
+
+                // 推送检索元信息给前端展示
+                Map<String, Object> searchInfo = ragQaMessageHook.getLastSearchInfo();
+                if (searchInfo != null) {
+                    String searchJson = objectMapper.writeValueAsString(
+                            Map.of("type", "search_info", "content", searchInfo));
+                    emitter.send(SseEmitter.event().name("search_info").data(searchJson));
+                }
 
                 // 按句拆分逐句发送
                 String[] segments = response.split("(?<=[。！？\\n])");

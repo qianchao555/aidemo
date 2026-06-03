@@ -84,18 +84,64 @@
           >
             <div class="message-bubble" :class="msg.role">
               <div class="message-content" v-html="renderContent(msg.content)" />
-              <div v-if="msg.sources?.length" class="source-cards">
-                <el-tag
-                  v-for="(src, si) in msg.sources"
-                  :key="si"
-                  size="small"
-                  type="info"
-                  effect="plain"
-                  class="source-tag"
-                >
-                  {{ src.document }}{{ src.clause ? ' · ' + src.clause : '' }}
-                </el-tag>
+
+              <!-- 引用出处弹窗（含检索方式） -->
+              <div v-if="msg.role === 'assistant' && msg.sources?.length" class="citation-trigger">
+                <el-popover placement="right" :width="380" trigger="click">
+                  <template #reference>
+                    <el-button size="small" text type="primary" :icon="Document">
+                      引用出处 ({{ msg.sources.length }})
+                    </el-button>
+                  </template>
+                  <div class="popover-content">
+                    <!-- 检索方式 -->
+                    <template v-if="searchInfoMap[msg.id]">
+                      <div class="popover-section">
+                        <div class="popover-section-title">检索方式</div>
+                        <el-tag
+                          :type="searchInfoMap[msg.id].searchMode === 'hybrid' ? 'success' : 'info'"
+                          size="small"
+                        >
+                          {{ searchInfoMap[msg.id].searchMode === 'hybrid' ? '混合检索 (向量 + 关键词)' : '向量检索' }}
+                        </el-tag>
+                        <div class="popover-stats" style="margin-top: 6px">
+                          <div class="stat-row">
+                            <span class="stat-label">向量命中</span>
+                            <span class="stat-value">{{ searchInfoMap[msg.id].vectorCount }} 条</span>
+                          </div>
+                          <div class="stat-row">
+                            <span class="stat-label">关键词命中</span>
+                            <span class="stat-value">{{ searchInfoMap[msg.id].keywordCount }} 条</span>
+                          </div>
+                          <div class="stat-row">
+                            <span class="stat-label">RRF 融合后</span>
+                            <span class="stat-value stat-emphasis">{{ searchInfoMap[msg.id].mergedCount }} 条</span>
+                          </div>
+                          <div v-if="searchInfoMap[msg.id].intent" class="stat-row">
+                            <span class="stat-label">识别意图</span>
+                            <span class="stat-value">{{ searchInfoMap[msg.id].intent }}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </template>
+
+                    <!-- 引用来源列表 -->
+                    <div :class="searchInfoMap[msg.id] ? 'popover-section' : ''">
+                      <div class="popover-section-title">引用来源</div>
+                      <div
+                        v-for="(src, si) in msg.sources"
+                        :key="si"
+                        class="citation-item"
+                      >
+                        <span class="citation-index">{{ si + 1 }}.</span>
+                        <span class="citation-doc">{{ src.document }}</span>
+                        <span v-if="src.clause" class="citation-clause">{{ src.clause }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </el-popover>
               </div>
+
               <div class="message-time">{{ formatTime(msg.timestamp) }}</div>
             </div>
           </div>
@@ -134,7 +180,7 @@ import { ref, watch, nextTick, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { marked } from 'marked'
 import { ElMessage } from 'element-plus'
-import { Delete, Expand, Fold, Plus } from '@element-plus/icons-vue'
+import { Delete, Expand, Fold, Plus, Document } from '@element-plus/icons-vue'
 import { useChatStore } from '@/stores/chat'
 import { ragQaChat, ragQaChatStream } from '@/api/agent'
 
@@ -147,15 +193,27 @@ const inputText = ref('')
 const sending = ref(false)
 const msgListRef = ref<HTMLElement>()
 
+interface SearchInfo {
+  searchMode: string
+  vectorCount: number
+  keywordCount: number
+  mergedCount: number
+  intent?: string
+}
+/** 每条消息对应的检索元信息，流式模式下收到 search_info 事件后写入 */
+const searchInfoMap = ref<Record<string, SearchInfo>>({})
+
 const exampleQuestions = [
-  '请介绍一下 Spring AI',
-  '知识库中有哪些内容？',
-  '如何使用 pgvector 向量存储？',
-  'MCP 协议是什么？'
+  '年假怎么申请？',
+  '病假需要提供什么证明材料？',
+  '加班费怎么计算？',
+  '离职流程需要多长时间？'
 ]
 
 function renderContent(text: string): string {
-  return marked.parse(text, { async: false }) as string
+  // 去掉答案中的 【出处】... 标记（已在引用气泡中展示）
+  const cleaned = text.replace(/【出处】.*?(\n|$)/g, '').replace(/\n{3,}/g, '\n\n')
+  return marked.parse(cleaned, { async: false }) as string
 }
 
 function formatTime(ts: number): string {
@@ -258,6 +316,9 @@ function handleStreamEvent(event: { type: string; content: unknown }, threadId: 
       break
     case 'done':
       chatStore.finishMessage(threadId, msgId)
+      break
+    case 'search_info':
+      searchInfoMap.value[msgId] = event.content as SearchInfo
       break
     case 'error':
       ElMessage.error((event.content as string) || '流式输出异常')
@@ -378,17 +439,75 @@ onMounted(async () => {
   40% { transform: scale(1); }
 }
 
+/* 引用触发按钮 */
+.citation-trigger {
+  margin-top: 6px;
+  text-align: right;
+}
+
+/* 弹出气泡内容 */
+.popover-content {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.popover-section {
+  margin-bottom: 6px;
+}
+.popover-section:not(:last-child) {
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #ebeef5;
+}
+.popover-section-title {
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+.popover-stats .stat-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+  color: #606266;
+  font-size: 12px;
+}
+.popover-stats .stat-label {
+  color: #909399;
+}
+.popover-stats .stat-value {
+  font-weight: 500;
+}
+.stat-emphasis {
+  color: #409EFF;
+  font-weight: 600;
+}
+
+/* 引用列表 */
+.citation-item {
+  padding: 5px 0;
+  border-bottom: 1px solid #f2f3f5;
+  display: flex;
+  gap: 6px;
+}
+.citation-item:last-child { border-bottom: none; }
+.citation-index {
+  color: #409EFF;
+  font-weight: 600;
+  min-width: 20px;
+}
+.citation-doc {
+  color: #303133;
+  font-weight: 500;
+}
+.citation-clause {
+  color: #909399;
+  font-size: 12px;
+}
+.citation-clause::before { content: '· '; }
+
 /* 输入区 */
 .input-area { padding: 12px 20px 20px; border-top: 1px solid #e4e7ed; }
 
-.source-cards {
-  margin-top: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.source-tag {
-  font-size: 11px;
-}
+/* 移除旧样式 */
+.source-cards { display: none; }
 </style>
