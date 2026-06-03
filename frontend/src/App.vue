@@ -10,6 +10,7 @@
         <span class="top-bar-brand">制度知识库助手</span>
       </div>
       <div class="top-bar-right">
+        <div class="top-bar-avatar">{{ displayName.charAt(0) }}</div>
         <span class="top-bar-user-name">{{ displayName }}</span>
         <el-tag v-if="isAdmin" size="small" type="warning">管理员</el-tag>
         <el-button text size="small" class="top-bar-logout" @click="handleLogout">
@@ -189,6 +190,20 @@ async function handleLogout() {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.top-bar-avatar {
+  width: 26px;
+  height: 26px;
+  background: var(--primary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
 }
 
 .top-bar-user-name {
