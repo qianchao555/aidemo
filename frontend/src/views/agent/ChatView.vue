@@ -1,6 +1,5 @@
 <template>
   <div class="chat-page">
-    <!-- 左侧会话列表 -->
     <div class="session-panel" :class="{ collapsed: sidebarCollapsed }">
       <div class="session-header">
         <span v-if="!sidebarCollapsed">会话列表</span>
@@ -12,9 +11,10 @@
         />
       </div>
       <template v-if="!sidebarCollapsed">
-        <el-button type="primary" style="width: 100%; margin-bottom: 10px" @click="newChat">
-          <el-icon><Plus /></el-icon> 新建对话
-        </el-button>
+        <button class="new-chat-btn" @click="newChat">
+          <el-icon :size="16"><Plus /></el-icon>
+          <span>新建对话</span>
+        </button>
         <div class="session-list">
           <div
             v-for="sess in chatStore.sessions"
@@ -23,7 +23,10 @@
             :class="{ active: sess.threadId === chatStore.currentThreadId }"
             @click="chatStore.switchSession(sess.threadId)"
           >
-            <span class="session-title">{{ sess.title }}</span>
+            <div class="session-item-main">
+              <span class="session-title">{{ sess.title }}</span>
+              <span class="session-meta">{{ sess.messageCount }} 条消息 · {{ relativeTime(sess.lastUpdateTime) }}</span>
+            </div>
             <el-popconfirm
               title="确定删除此会话？"
               @confirm="chatStore.deleteSession(sess.threadId)"
@@ -39,26 +42,26 @@
       </template>
     </div>
 
-    <!-- 右侧对话区 -->
     <div class="chat-main">
       <template v-if="!chatStore.hasCurrentSession">
         <div class="welcome">
-          <h2>AI 智能问答</h2>
-          <p>基于 RAG 知识库的智能助手，为您提供精准回答</p>
+          <div class="welcome-icon">
+            <el-icon :size="48" color="#E87040"><ChatDotRound /></el-icon>
+          </div>
+          <h2 class="welcome-title">AI 智能问答</h2>
+          <p class="welcome-desc">基于 RAG 知识库的智能助手，为您提供精准回答</p>
           <div class="example-cards">
-            <el-card
+            <button
               v-for="q in exampleQuestions"
               :key="q"
-              shadow="hover"
               class="example-card"
               @click="quickStart(q)"
-            >{{ q }}</el-card>
+            >{{ q }}</button>
           </div>
         </div>
       </template>
 
       <template v-else>
-        <!-- 消息列表 -->
         <div class="message-list" ref="msgListRef">
           <div
             v-for="msg in chatStore.currentMessages"
@@ -69,16 +72,14 @@
             <div class="message-bubble" :class="msg.role">
               <div class="message-content" v-html="renderContent(msg.content)" />
 
-              <!-- 引用出处弹窗（含检索方式） -->
               <div v-if="msg.role === 'assistant' && msg.sources?.length" class="citation-trigger">
                 <el-popover placement="right" :width="380" trigger="click">
                   <template #reference>
-                    <el-button size="small" text type="primary" :icon="Document">
+                    <el-button size="small" text type="primary" :icon="Document" class="citation-btn">
                       引用出处 ({{ msg.sources.length }})
                     </el-button>
                   </template>
                   <div class="popover-content">
-                    <!-- 检索方式 -->
                     <template v-if="searchInfoMap[msg.id]">
                       <div class="popover-section">
                         <div class="popover-section-title">检索方式</div>
@@ -108,15 +109,9 @@
                         </div>
                       </div>
                     </template>
-
-                    <!-- 引用来源列表 -->
                     <div :class="searchInfoMap[msg.id] ? 'popover-section' : ''">
                       <div class="popover-section-title">引用来源</div>
-                      <div
-                        v-for="(src, si) in msg.sources"
-                        :key="si"
-                        class="citation-item"
-                      >
+                      <div v-for="(src, si) in msg.sources" :key="si" class="citation-item">
                         <span class="citation-index">{{ si + 1 }}.</span>
                         <span class="citation-doc">{{ src.document }}</span>
                         <span v-if="src.clause" class="citation-clause">{{ src.clause }}</span>
@@ -136,23 +131,25 @@
           </div>
         </div>
 
-        <!-- 输入区 -->
         <div class="input-area">
-          <el-input
-            v-model="inputText"
-            type="textarea"
-            :rows="3"
-            placeholder="输入您的问题，Enter 发送，Shift+Enter 换行"
-            :disabled="sending"
-            @keydown.enter.exact="handleSend"
-          />
-          <el-button
-            type="primary"
-            :loading="sending"
-            :disabled="!inputText.trim()"
-            style="margin-top: 8px"
-            @click="handleSend"
-          >发送</el-button>
+          <div class="input-row">
+            <textarea
+              v-model="inputText"
+              class="chat-input"
+              rows="3"
+              placeholder="输入您的问题，Enter 发送，Shift+Enter 换行"
+              :disabled="sending"
+              @keydown.enter.exact.prevent="handleSend"
+            ></textarea>
+            <button
+              class="send-btn"
+              :disabled="!inputText.trim() || sending"
+              @click="handleSend"
+            >
+              <el-icon v-if="!sending" :size="18"><Promotion /></el-icon>
+              <el-icon v-else :size="18" class="loading-icon"><Loading /></el-icon>
+            </button>
+          </div>
         </div>
       </template>
     </div>
@@ -164,7 +161,7 @@ import { ref, watch, nextTick, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { marked } from 'marked'
 import { ElMessage } from 'element-plus'
-import { Delete, Expand, Fold, Plus, Document } from '@element-plus/icons-vue'
+import { Delete, Expand, Fold, Plus, Document, Promotion, Loading, ChatDotRound } from '@element-plus/icons-vue'
 import { useChatStore } from '@/stores/chat'
 import { ragQaChat, ragQaChatStream } from '@/api/agent'
 
@@ -193,6 +190,18 @@ const exampleQuestions = [
   '加班费怎么计算？',
   '离职流程需要多长时间？'
 ]
+
+function relativeTime(dateStr: string): string {
+  if (!dateStr) return ''
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return '刚刚'
+  if (mins < 60) return `${mins}分钟前`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}小时前`
+  const days = Math.floor(hours / 24)
+  return `${days}天前`
+}
 
 function renderContent(text: string): string {
   // 去掉答案中的 【出处】... 标记（已在引用气泡中展示）
@@ -354,59 +363,248 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.chat-page { display: flex; height: calc(100vh - 100px); background: #fff; border-radius: 4px; overflow: hidden; }
+/* ===== Chat Page Layout ===== */
+.chat-page {
+  display: flex;
+  height: calc(100vh - 80px);
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
 
-/* 会话面板 */
+/* ===== Session Panel ===== */
 .session-panel {
-  width: 260px; border-right: 1px solid #e4e7ed; display: flex; flex-direction: column;
-  padding: 12px; transition: width 0.2s;
+  width: 260px;
+  background: var(--surface-warm);
+  border-right: 1px solid var(--border-light);
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  transition: width 0.2s;
+  flex-shrink: 0;
 }
-.session-panel.collapsed { width: 50px; padding: 12px 8px; }
-.session-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: 600; }
-.session-list { flex: 1; overflow-y: auto; }
+
+.session-panel.collapsed {
+  width: 50px;
+  padding: 12px 8px;
+}
+
+.session-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.new-chat-btn {
+  width: 100%;
+  height: 38px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  transition: background 0.15s;
+}
+
+.new-chat-btn:hover {
+  background: var(--primary-hover);
+}
+
+.session-list {
+  flex: 1;
+  overflow-y: auto;
+  margin: 0 -4px;
+}
+
 .session-item {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 10px; border-radius: 6px; cursor: pointer; margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  margin-bottom: 2px;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
 }
-.session-item:hover { background: #f0f2f5; }
-.session-item.active { background: #ecf5ff; color: #409EFF; }
-.session-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
 
-/* 对话主区域 */
-.chat-main { flex: 1; display: flex; flex-direction: column; }
+.session-item:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.session-item.active {
+  background: rgba(232, 112, 64, 0.06);
+  border-left-color: var(--primary);
+}
+
+.session-item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.session-title {
+  font-size: 13px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.session-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ===== Chat Main ===== */
+.chat-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* ===== Welcome Page ===== */
 .welcome {
-  flex: 1; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 16px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px;
 }
-.welcome h2 { font-size: 24px; color: #303133; }
-.welcome p { color: #909399; }
-.example-cards { display: flex; gap: 12px; flex-wrap: wrap; max-width: 600px; justify-content: center; }
-.example-card { cursor: pointer; padding: 10px 16px; font-size: 13px; color: #409EFF; }
-.example-card:hover { background: #ecf5ff; }
 
-/* 消息列表 */
-.message-list { flex: 1; overflow-y: auto; padding: 20px; }
-.message-row { display: flex; margin-bottom: 20px; }
+.welcome-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 20px;
+  background: rgba(232, 112, 64, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.welcome-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.welcome-desc {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+
+.example-cards {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  max-width: 560px;
+  justify-content: center;
+}
+
+.example-card {
+  padding: 10px 18px;
+  font-size: 13px;
+  color: var(--primary);
+  background: var(--white);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.example-card:hover {
+  background: rgba(232, 112, 64, 0.05);
+  border-color: var(--primary);
+}
+
+/* ===== Message List ===== */
+.message-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+.message-row {
+  display: flex;
+  margin-bottom: 20px;
+}
+
 .message-row.user { justify-content: flex-end; }
 .message-row.assistant { justify-content: flex-start; }
-.message-bubble { max-width: 75%; padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 1.6; }
-.message-bubble.user { background: #409EFF; color: #fff; border-bottom-right-radius: 4px; }
-.message-bubble.assistant { background: #f0f2f5; color: #303133; border-bottom-left-radius: 4px; }
-.message-time { font-size: 11px; margin-top: 6px; opacity: 0.7; }
+
+.message-bubble {
+  max-width: 72%;
+  padding: 12px 16px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.message-bubble.user {
+  background: var(--primary);
+  color: white;
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-sm) var(--radius-lg);
+}
+
+.message-bubble.assistant {
+  background: var(--page-bg);
+  color: var(--text-primary);
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-sm);
+}
+
+.message-time {
+  font-size: 11px;
+  margin-top: 6px;
+  opacity: 0.6;
+}
+
 .message-bubble.user .message-content :deep(p) { margin: 0; }
 .message-bubble.assistant .message-content :deep(p) { margin: 4px 0; }
 .message-bubble.assistant .message-content :deep(pre) {
-  background: #e8eaed; padding: 10px; border-radius: 6px; overflow-x: auto;
-  font-size: 12px; margin: 8px 0;
+  background: #e8eaed;
+  padding: 10px;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 12px;
+  margin: 8px 0;
 }
 .message-bubble.assistant .message-content :deep(code) {
-  background: #e8eaed; padding: 1px 4px; border-radius: 3px; font-size: 12px;
+  background: #e8eaed;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
 }
 
-/* typing 动画 */
+/* Typing animation */
 .typing .dot {
-  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
-  background: #909399; margin: 0 2px; animation: bounce 1.4s infinite both;
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  margin: 0 2px;
+  animation: bounce 1.4s infinite both;
 }
 .typing .dot:nth-child(2) { animation-delay: 0.2s; }
 .typing .dot:nth-child(3) { animation-delay: 0.4s; }
@@ -415,50 +613,49 @@ onMounted(async () => {
   40% { transform: scale(1); }
 }
 
-/* 引用触发按钮 */
+/* Citation */
 .citation-trigger {
   margin-top: 6px;
-  text-align: right;
 }
 
-/* 弹出气泡内容 */
+.citation-btn {
+  font-size: 12px !important;
+}
+
 .popover-content {
   font-size: 13px;
   line-height: 1.6;
 }
+
 .popover-section {
   margin-bottom: 6px;
 }
+
 .popover-section:not(:last-child) {
   padding-bottom: 8px;
   margin-bottom: 10px;
   border-bottom: 1px solid #ebeef5;
 }
+
 .popover-section-title {
   font-weight: 600;
-  color: #303133;
+  color: var(--text-primary);
   margin-bottom: 6px;
   font-size: 13px;
 }
+
 .popover-stats .stat-row {
   display: flex;
   justify-content: space-between;
   padding: 2px 0;
-  color: #606266;
+  color: var(--text-secondary);
   font-size: 12px;
 }
-.popover-stats .stat-label {
-  color: #909399;
-}
-.popover-stats .stat-value {
-  font-weight: 500;
-}
-.stat-emphasis {
-  color: #409EFF;
-  font-weight: 600;
-}
 
-/* 引用列表 */
+.popover-stats .stat-label { color: var(--text-muted); }
+.popover-stats .stat-value { font-weight: 500; }
+.stat-emphasis { color: var(--primary); font-weight: 600; }
+
 .citation-item {
   padding: 5px 0;
   border-bottom: 1px solid #f2f3f5;
@@ -466,24 +663,75 @@ onMounted(async () => {
   gap: 6px;
 }
 .citation-item:last-child { border-bottom: none; }
-.citation-index {
-  color: #409EFF;
-  font-weight: 600;
-  min-width: 20px;
-}
-.citation-doc {
-  color: #303133;
-  font-weight: 500;
-}
-.citation-clause {
-  color: #909399;
-  font-size: 12px;
-}
+.citation-index { color: var(--primary); font-weight: 600; min-width: 20px; }
+.citation-doc { color: var(--text-primary); font-weight: 500; }
+.citation-clause { color: var(--text-muted); font-size: 12px; }
 .citation-clause::before { content: '· '; }
 
-/* 输入区 */
-.input-area { padding: 12px 20px 20px; border-top: 1px solid #e4e7ed; }
+/* ===== Input Area ===== */
+.input-area {
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--border-light);
+}
 
-/* 移除旧样式 */
-.source-cards { display: none; }
+.input-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.chat-input {
+  flex: 1;
+  resize: none;
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1.5;
+  outline: none;
+  transition: border-color 0.15s;
+  background: var(--surface-warm);
+}
+
+.chat-input:focus {
+  border-color: var(--primary);
+}
+
+.chat-input::placeholder {
+  color: var(--text-muted);
+}
+
+.send-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius-md);
+  background: var(--primary);
+  color: white;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.send-btn:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.send-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.loading-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 </style>
