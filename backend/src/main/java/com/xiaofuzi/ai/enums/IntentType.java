@@ -1,4 +1,4 @@
-package com.xiaofuzi.ai.rag;
+package com.xiaofuzi.ai.enums;
 
 import java.util.regex.Pattern;
 

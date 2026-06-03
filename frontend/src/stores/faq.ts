@@ -36,10 +36,10 @@ export const useFaqStore = defineStore('faq', () => {
     await fetchList()
   }
 
-  async function fetchCandidates(limit: number = 20) {
+  async function fetchCandidates(limit: number = 20, minFrequency: number = 3) {
     candidatesLoading.value = true
     try {
-      candidates.value = await faqCandidates(limit)
+      candidates.value = await faqCandidates(limit, minFrequency)
     } finally {
       candidatesLoading.value = false
     }

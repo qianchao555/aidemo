@@ -53,14 +53,12 @@
               <div class="el-upload__text">拖拽文件到此处 或 <em>点击上传</em></div>
             </el-upload>
           </el-form-item>
-          <el-form-item label="分类">
-            <el-select v-model="uploadCategory" placeholder="选择分类" clearable style="width: 200px">
-              <el-option label="请假" value="请假" />
-              <el-option label="考勤" value="考勤" />
-              <el-option label="报销" value="报销" />
-              <el-option label="入职" value="入职" />
-              <el-option label="离职" value="离职" />
-              <el-option label="转正" value="转正" />
+          <el-form-item label="文档类型">
+            <el-select v-model="uploadCategory" placeholder="选择文档类型" style="width: 200px">
+              <el-option label="制度文档" value="制度" />
+              <el-option label="流程文档" value="流程" />
+              <el-option label="FAQ文档" value="FAQ" />
+              <el-option label="自动检测" value="" />
             </el-select>
           </el-form-item>
           <el-form-item label="解析器">

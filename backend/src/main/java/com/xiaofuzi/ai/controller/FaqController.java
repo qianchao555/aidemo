@@ -1,7 +1,7 @@
 package com.xiaofuzi.ai.controller;
 
 import com.xiaofuzi.ai.entity.FaqEntry;
-import com.xiaofuzi.ai.rag.FaqService;
+import com.xiaofuzi.ai.service.FaqService;
 import com.xiaofuzi.ai.vo.Result;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,8 +71,10 @@ public class FaqController {
     }
 
     @GetMapping("/faq/candidates")
-    public Result<List<Map<String, Object>>> faqCandidates(@RequestParam(defaultValue = "20") int limit) {
-        return Result.success(faqService.getFaqCandidates(limit));
+    public Result<List<Map<String, Object>>> faqCandidates(
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(defaultValue = "3") int minFrequency) {
+        return Result.success(faqService.getFaqCandidates(limit, minFrequency));
     }
 
 }

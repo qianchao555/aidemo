@@ -8,34 +8,45 @@ import java.util.regex.Pattern;
 
 /**
  * 中文制度文档标题检测与结构切分工具。
- * 识别中文制度文档的标题层级（章/节/条/款），将长文本按标题边界切分为带标题路径的结构化段落。
- * PDF 解析器已内置此逻辑（设置 skip_split=true）；Word/通用解析器的输出由本工具后处理时使用。
+ *
+ * <p>三条设计原则：
+ * <ol>
+ *   <li><b>语义聚合</b> — 同一标题下的多个段落合并为一个 chunk，不拆散同一语义单元</li>
+ *   <li><b>直接标题</b> — chunk 文本前缀仅包含当前标题（如"[第一条 目的]"），
+ *       完整路径（"第一章 总则 > 第一条 目的"）仅存于 metadata.heading_path</li>
+ *   <li><b>超长拆分</b> — 单 chunk 超过 {@value #MAX_CHUNK_CHARS} 字符时才按段落拆分</li>
+ * </ol>
  */
 public final class HeadingChunker {
+
+    /** 单 chunk 最大字符数，超过此值才按段落拆分 */
+    private static final int MAX_CHUNK_CHARS = 800;
 
     private static final Pattern HEADING_PATTERN = buildHeadingPattern();
 
     private HeadingChunker() {}
 
     /**
-     * 尝试按标题切分文本。如果没有检测到标题，返回仅含一个无结构标记的 Document。
-     * 返回的每个 Document 都带有 heading_path、heading_title、heading_level、skip_split=true 等元数据。
+     * 按标题切分并聚合段落。无标题结构时返回空 structure 的单 Document。
+     *
+     * @return 每个 Document 的元数据包含 heading_path（完整路径）、heading_title（直接标题）、heading_level
      */
     public static List<Document> chunk(String text, String contentType) {
         List<Section> sections = extractSections(text);
         boolean hasHeadings = sections.stream().anyMatch(s -> s.level > 0);
 
         if (!hasHeadings) {
-            return List.of(new Document(text, mapOf(
+            // 无结构标记：空 heading_path 表示"未检测到"
+            return List.of(new Document(text, Map.of(
                     "content_type", contentType,
-                    "heading_path", "",
-                    "skip_split", true)));
+                    "heading_path", "")));
         }
 
         List<Document> chunks = new ArrayList<>();
         Deque<HeadingInfo> headingStack = new ArrayDeque<>();
 
         for (Section section : sections) {
+            // 管理标题栈：弹出同级或上级标题
             if (section.level > 0) {
                 while (!headingStack.isEmpty() && headingStack.peek().level >= section.level) {
                     headingStack.pop();
@@ -43,18 +54,23 @@ public final class HeadingChunker {
                 headingStack.push(new HeadingInfo(section.level, section.title));
             }
 
-            String headingPath = buildHeadingPath(headingStack);
-            for (String paragraph : splitParagraphs(section.content)) {
-                if (paragraph.isBlank()) continue;
-                String enriched = headingPath.isEmpty()
-                        ? paragraph
-                        : "[" + headingPath + "]\n" + paragraph;
-                Map<String, Object> meta = new HashMap<>();
+            String fullPath = buildHeadingPath(headingStack);
+            String directTitle = section.level > 0 ? section.title : "";
+
+            // 同一标题下聚合段落
+            for (String aggregated : aggregateParagraphs(section.content)) {
+                if (aggregated.isBlank()) continue;
+
+                // chunk 文本仅标注当前标题，完整路径走 metadata
+                String enriched = directTitle.isEmpty()
+                        ? aggregated
+                        : "[" + directTitle + "] " + aggregated;
+
+                Map<String, Object> meta = new LinkedHashMap<>();
                 meta.put("content_type", contentType);
-                meta.put("heading_path", headingPath);
-                meta.put("skip_split", true);
+                meta.put("heading_path", fullPath);
                 if (section.level > 0) {
-                    meta.put("heading_title", section.title);
+                    meta.put("heading_title", directTitle);
                     meta.put("heading_level", section.level);
                 }
                 chunks.add(new Document(enriched, meta));
@@ -68,7 +84,35 @@ public final class HeadingChunker {
         return chunks;
     }
 
-    // ── 内部实现 ──
+    // ── 段落聚合：同一标题下的段落合并，超长才拆分 ──
+
+    /**
+     * 将同标题下的段落合并为尽量少的 chunk。
+     * 段落间用空行分隔，累计超过 MAX_CHUNK_CHARS 时切出一个新 chunk。
+     */
+    static List<String> aggregateParagraphs(String content) {
+        List<String> paragraphs = splitParagraphs(content);
+        if (paragraphs.isEmpty()) return List.of();
+
+        List<String> result = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+
+        for (String p : paragraphs) {
+            if (p.isBlank()) continue;
+            // 当前 chunk 不为空 且 加入新段落后会超长 → 切出
+            if (!current.isEmpty() && current.length() + 2 + p.length() > MAX_CHUNK_CHARS) {
+                result.add(current.toString());
+                current.setLength(0);
+            }
+            if (!current.isEmpty()) current.append("\n\n");
+            current.append(p);
+        }
+        if (!current.isEmpty()) result.add(current.toString());
+
+        return result.isEmpty() ? List.of() : result;
+    }
+
+    // ── 正则与标题层级 ──
 
     private static Pattern buildHeadingPattern() {
         String cn = "[一二三四五六七八九十百千]+";
@@ -96,6 +140,8 @@ public final class HeadingChunker {
         if (t.matches("^\\d+[、\\.．]\\s*.+")) return 5;
         return 3;
     }
+
+    // ── 文本切分 ──
 
     private static List<Section> extractSections(String text) {
         List<Section> sections = new ArrayList<>();
@@ -138,15 +184,6 @@ public final class HeadingChunker {
             sb.append(it.next().title);
         }
         return sb.toString();
-    }
-
-    private static Map<String, Object> mapOf(String key, Object value, Object... rest) {
-        Map<String, Object> m = new HashMap<>();
-        m.put(key, value);
-        for (int i = 0; i < rest.length; i += 2) {
-            m.put((String) rest[i], rest[i + 1]);
-        }
-        return m;
     }
 
     // ── 内部类型 ──

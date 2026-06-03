@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xiaofuzi.ai.rag.parser.DocumentParser;
 import com.xiaofuzi.ai.rag.parser.DocumentParserFactory;
+import com.xiaofuzi.ai.rag.parser.FaqChunker;
 import com.xiaofuzi.ai.rag.parser.HeadingChunker;
 import com.xiaofuzi.ai.rag.parser.ProcessChunker;
 import org.slf4j.Logger;
@@ -103,9 +104,13 @@ public class KnowledgeBaseService {
             sharedMeta.put("source", fileName);
             sharedMeta.put("file_type", getFileExtension(fileName));
             sharedMeta.put("document_id", doc.getId().toString());
+            // 将前端传入的文档类别透传到切分层，用于精确路由切分策略
+            if (category != null && !category.isBlank()) {
+                sharedMeta.put("document_category", category);
+            }
             ingestParsedDocuments(parsedDocs, sharedMeta, doc.getId());
 
-            doc.setChunkCount(countChunksInLastIngest(parsedDocs));
+            doc.setChunkCount(countChunksInLastIngest(parsedDocs, sharedMeta));
             documentMapper.update(doc);
 
             logger.info("文件上传导入完成: {}, docId={}, 共 {} 个解析单元, 解析器: {}",
@@ -116,15 +121,18 @@ public class KnowledgeBaseService {
         }
     }
 
-    private int countChunksInLastIngest(List<Document> parsedDocs) {
+    private int countChunksInLastIngest(List<Document> parsedDocs, Map<String, Object> sharedMeta) {
         int count = 0;
         for (Document parsedDoc : parsedDocs) {
-            boolean skipSplit = Boolean.TRUE.equals(parsedDoc.getMetadata() != null
-                    && Boolean.TRUE.equals(parsedDoc.getMetadata().get("skip_split")));
+            Map<String, Object> mergedMeta = new HashMap<>(sharedMeta);
+            if (parsedDoc.getMetadata() != null) {
+                mergedMeta.putAll(parsedDoc.getMetadata());
+            }
+            boolean skipSplit = Boolean.TRUE.equals(mergedMeta.get("skip_split"));
             if (skipSplit) {
                 count += 1;
             } else {
-                count += textSplitter.apply(List.of(parsedDoc)).size();
+                count += chunkSmart(new Document(parsedDoc.getText(), mergedMeta)).size();
             }
         }
         return count;
@@ -152,8 +160,8 @@ public class KnowledgeBaseService {
                 Document singleChunk = new Document(enrichedDoc.getText(), chunkMeta);
                 allChunks.add(singleChunk);
             } else {
-                // 优先尝试标题结构切分（中文制度文档），检测不到标题时回退到 TokenTextSplitter
-                List<Document> chunks = chunkWithHeadingFallback(enrichedDoc);
+                // 策略链切分：依次尝试标题/流程/FAQ 三种专用切分器，按结构命中率自动选择最优
+                List<Document> chunks = chunkSmart(enrichedDoc);
 
                 for (int i = 0; i < chunks.size(); i++) {
                     Map<String, Object> chunkMeta = new HashMap<>(chunks.get(i).getMetadata());
@@ -171,44 +179,118 @@ public class KnowledgeBaseService {
     }
 
     /**
-     * 策略链切分：标题结构 → 流程结构 → TokenTextSplitter 兜底。
-     * 制度文档和流程文档的文本结构不同，依次尝试两种专用切分器，都未命中再用通用切分。
+     * 智能切分策略，按文档类别精确路由 + 自动检测兜底。
+     *
+     * <p>路由规则：
+     * <ol>
+     *   <li>有 category 元数据时，直接定位对应切分器，不遍历尝试</li>
+     *   <li>category 不明确或无命中时，走自动检测链</li>
+     *   <li>自动检测也失败时，回退到 TokenTextSplitter</li>
+     * </ol>
+     *
+     * <p>category 取值映射：
+     * <ul>
+     *   <li>制度 / 政策 / 规范 / 手册 → {@link HeadingChunker}</li>
+     *   <li>流程 / 指引 / 办理 → {@link ProcessChunker}</li>
+     *   <li>FAQ / 问答 / 常见问题 → {@link FaqChunker}</li>
+     *   <li>auto / 空 / 其他 → 自动检测</li>
+     * </ul>
      */
-    private List<Document> chunkWithHeadingFallback(Document doc) {
+    private List<Document> chunkSmart(Document doc) {
         String contentType = (String) doc.getMetadata().getOrDefault("content_type", "unknown");
+        String category = (String) doc.getMetadata().getOrDefault("document_category", "");
         String text = doc.getText();
 
-        // 第一优先：标题结构切分（制度文档的"章/节/条/款"模式）
-        List<Document> headingChunks = HeadingChunker.chunk(text, contentType);
-        if (hasStructure(headingChunks, "heading_path")) {
-            for (Document hc : headingChunks) {
-                hc.getMetadata().putAll(doc.getMetadata());
+        // 第一步：根据文档类别精确路由（只有 category 明确指定时）
+        if (category != null && !category.isBlank()) {
+            List<Document> routed = routeByCategory(text, contentType, category);
+            if (routed != null) {
+                for (Document c : routed) {
+                    c.getMetadata().putAll(doc.getMetadata());
+                }
+                return routed;
             }
-            return headingChunks;
         }
 
-        // 第二优先：流程结构切分（流程文档的"第N步/角色/时限/材料"模式）
-        List<Document> processChunks = ProcessChunker.chunk(text, contentType);
-        if (hasStructure(processChunks, "step_title")) {
-            for (Document pc : processChunks) {
-                pc.getMetadata().putAll(doc.getMetadata());
+        // 第二步：category 未指定或指定类别未命中 → 自动检测
+        // @formatter:off
+        record Strategy(String name, java.util.function.BiFunction<String, String, List<Document>> fn, String marker) {}
+        // @formatter:on
+        Strategy[] strategies = {
+                new Strategy("HeadingChunker", HeadingChunker::chunk, "heading_path"),
+                new Strategy("ProcessChunker", ProcessChunker::chunk, "step_title"),
+                new Strategy("FaqChunker",     FaqChunker::chunk,     "qa_question"),
+        };
+
+        for (Strategy s : strategies) {
+            List<Document> chunks = s.fn.apply(text, contentType);
+            if (chunks.size() > 1
+                    || (chunks.size() == 1 && nonBlankMeta(chunks.get(0), s.marker))) {
+                for (Document c : chunks) {
+                    c.getMetadata().putAll(doc.getMetadata());
+                }
+                logger.debug("切分策略自动检测命中: {} → {} 个 chunk (文档 {} 字符)",
+                        s.name, chunks.size(), text.length());
+                return chunks;
             }
-            return processChunks;
         }
 
-        // 兜底：通用 Token 切分
+        // 第三步：兜底
         return textSplitter.apply(List.of(doc));
     }
 
-    /** 判断切分结果是否检测到了结构：至少一个有非空结构标记的 chunk。 */
-    private static boolean hasStructure(List<Document> chunks, String markerKey) {
-        if (chunks.size() > 1) return true;
-        if (chunks.size() == 1) {
-            Object val = chunks.get(0).getMetadata() != null
-                    ? chunks.get(0).getMetadata().get(markerKey) : null;
-            return val instanceof String s && !s.isEmpty();
+    /**
+     * 根据文档类别精确路由到对应切分器。
+     * 返回 null 表示指定类别的切分器未命中，由调用方回退到自动检测。
+     */
+    private List<Document> routeByCategory(String text, String contentType, String category) {
+        String lower = category.toLowerCase();
+
+        // 制度类 → HeadingChunker
+        if (lower.contains("制度") || lower.contains("政策") || lower.contains("规范")
+                || lower.contains("手册") || lower.contains("条例") || lower.contains("policy")) {
+            List<Document> chunks = HeadingChunker.chunk(text, contentType);
+            if (chunks.size() > 1 || (chunks.size() == 1 && nonBlankMeta(chunks.get(0), "heading_path"))) {
+                logger.info("切分策略(类别路由): 制度类 → HeadingChunker → {} chunk", chunks.size());
+                return chunks;
+            }
+            // 标记为制度但切分器未命中：该文档标题格式不规范，降级为自动检测
+            logger.warn("文档标记为制度类但 HeadingChunker 未检测到标题结构，回退自动检测");
+            return null;
         }
-        return false;
+
+        // 流程类 → ProcessChunker
+        if (lower.contains("流程") || lower.contains("指引") || lower.contains("办理")
+                || lower.contains("审批") || lower.contains("process")) {
+            List<Document> chunks = ProcessChunker.chunk(text, contentType);
+            if (chunks.size() > 1 || (chunks.size() == 1 && nonBlankMeta(chunks.get(0), "step_title"))) {
+                logger.info("切分策略(类别路由): 流程类 → ProcessChunker → {} chunk", chunks.size());
+                return chunks;
+            }
+            logger.warn("文档标记为流程类但 ProcessChunker 未检测到步骤结构，回退自动检测");
+            return null;
+        }
+
+        // FAQ 类 → FaqChunker
+        if (lower.contains("faq") || lower.contains("问答") || lower.contains("常见问题")
+                || lower.contains("qa")) {
+            List<Document> chunks = FaqChunker.chunk(text, contentType);
+            if (chunks.size() > 1 || (chunks.size() == 1 && nonBlankMeta(chunks.get(0), "qa_question"))) {
+                logger.info("切分策略(类别路由): FAQ类 → FaqChunker → {} chunk", chunks.size());
+                return chunks;
+            }
+            logger.warn("文档标记为 FAQ 类但 FaqChunker 未检测到问答结构，回退自动检测");
+            return null;
+        }
+
+        // 无法识别的类别 → 自动检测
+        return null;
+    }
+
+    /** 检查 Document 元数据中指定 key 是否存在非空字符串值。 */
+    private static boolean nonBlankMeta(Document doc, String key) {
+        Object val = doc.getMetadata() != null ? doc.getMetadata().get(key) : null;
+        return val instanceof String s && !s.isBlank();
     }
 
     private void batchAdd(List<Document> documents, Long documentId) {
@@ -529,28 +611,39 @@ public class KnowledgeBaseService {
         int currentLength = sb.length();
         for (int i = 0; i < documents.size(); i++) {
             Document doc = documents.get(i);
+            Map<String, Object> meta = doc.getMetadata();
             String content = doc.getText();
-            String source = doc.getMetadata() != null
-                    ? (String) doc.getMetadata().getOrDefault("source", "未知来源")
-                    : "未知来源";
-            Object pageNumber = doc.getMetadata() != null
-                    ? doc.getMetadata().get("start_page")
-                    : null;
-            Object clauseTitle = doc.getMetadata() != null
-                    ? doc.getMetadata().get("clause_title")
-                    : null;
+            String source = meta != null ? (String) meta.getOrDefault("source", "未知来源") : "未知来源";
 
-            StringBuilder headerBuilder = new StringBuilder();
-            headerBuilder.append(String.format("\n[参考%d] (来源: %s", i + 1, source));
-            if (clauseTitle != null) {
-                headerBuilder.append(", ").append(clauseTitle);
-            }
-            if (pageNumber != null) {
-                headerBuilder.append(", 第").append(pageNumber).append("页");
-            }
-            headerBuilder.append(")\n");
+            // 构建结构化参考头部：制度文档显示章节路径，流程文档显示步骤/角色/时限/材料
+            StringBuilder header = new StringBuilder();
+            header.append(String.format("\n[参考%d] 来源: %s", i + 1, source));
 
-            String entry = headerBuilder + content + "\n";
+            if (meta != null) {
+                // 制度文档：章节路径
+                String headingPath = (String) meta.get("heading_path");
+                if (headingPath != null && !headingPath.isBlank()) {
+                    header.append(" > ").append(headingPath);
+                }
+                // 流程文档：步骤标题
+                String stepTitle = (String) meta.get("step_title");
+                if (stepTitle != null && !stepTitle.isBlank()) {
+                    header.append(" | ").append(stepTitle);
+                }
+                // 流程文档：角色 / 时限 / 材料
+                appendIfPresent(header, meta, "step_role", " | 角色：");
+                appendIfPresent(header, meta, "step_time_limit", " | 时限：");
+                appendIfPresent(header, meta, "step_materials", " | 材料：");
+                appendIfPresent(header, meta, "step_scope", " | 适用范围：");
+                // FAQ
+                String qaQuestion = (String) meta.get("qa_question");
+                if (qaQuestion != null && !qaQuestion.isBlank()) {
+                    header.append(" | FAQ：").append(qaQuestion);
+                }
+            }
+            header.append("\n");
+
+            String entry = header.toString() + content + "\n";
 
             if (currentLength + entry.length() > maxLength && i > 0) {
                 sb.append("\n... (共").append(documents.size()).append("条，已截取前").append(i).append("条)");
@@ -561,6 +654,13 @@ public class KnowledgeBaseService {
         }
 
         return sb.toString();
+    }
+
+    private static void appendIfPresent(StringBuilder sb, Map<String, Object> meta, String key, String prefix) {
+        String val = (String) meta.get(key);
+        if (val != null && !val.isBlank()) {
+            sb.append(prefix).append(val);
+        }
     }
 
     public Map<String, Object> getStats() {
@@ -597,6 +697,8 @@ public class KnowledgeBaseService {
     }
 
     public int reingestDocument(Long documentId, MultipartFile file) {
+        KnowledgeDocument existing = documentMapper.findById(documentId);
+        String category = existing != null ? existing.getCategory() : null;
         deleteByDocumentId(documentId);
 
         String fileName = file.getOriginalFilename();
@@ -614,7 +716,11 @@ public class KnowledgeBaseService {
 
             Map<String, Object> sharedMeta = new HashMap<>();
             sharedMeta.put("source", fileName);
+            sharedMeta.put("file_type", getFileExtension(fileName));
             sharedMeta.put("document_id", documentId.toString());
+            if (category != null && !category.isBlank()) {
+                sharedMeta.put("document_category", category);
+            }
             int chunkCount = ingestParsedDocumentsCount(parsedDocs, sharedMeta, documentId);
 
             logger.info("文档重摄入完成: id={}, fileName={}, chunks={}", documentId, fileName, chunkCount);
@@ -642,7 +748,7 @@ public class KnowledgeBaseService {
                 chunkMeta.put("total_chunks", 1);
                 allChunks.add(new Document(enrichedDoc.getText(), chunkMeta));
             } else {
-                List<Document> chunks = chunkWithHeadingFallback(enrichedDoc);
+                List<Document> chunks = chunkSmart(enrichedDoc);
                 for (int i = 0; i < chunks.size(); i++) {
                     Map<String, Object> chunkMeta = new HashMap<>(chunks.get(i).getMetadata());
                     chunkMeta.put("chunk_index", i);

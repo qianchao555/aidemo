@@ -19,5 +19,5 @@ export const deleteFaq = (id: number) =>
 export const highFreqFaq = (limit: number = 10) =>
   get<FaqEntry[]>('/faq/faq/high-freq', { limit })
 
-export const faqCandidates = (limit: number = 20) =>
-  get<FaqCandidate[]>('/faq/faq/candidates', { limit })
+export const faqCandidates = (limit: number = 20, minFrequency: number = 3) =>
+  get<FaqCandidate[]>('/faq/faq/candidates', { limit, minFrequency })

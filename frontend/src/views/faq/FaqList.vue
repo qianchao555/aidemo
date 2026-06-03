@@ -29,9 +29,19 @@
             <strong>FAQ 候选</strong>
             <span style="color: #909399; font-size: 13px; margin-left: 8px">从聊天记录中挖掘的高频提问</span>
           </span>
-          <el-button size="small" type="primary" :loading="faqStore.candidatesLoading" @click="loadCandidates">
-            挖掘候选
-          </el-button>
+          <span style="display: flex; align-items: center; gap: 8px">
+            <span style="font-size: 13px; color: #606266">最低频次</span>
+            <el-input-number
+              v-model="minFrequency"
+              :min="2"
+              :max="100"
+              size="small"
+              style="width: 90px"
+            />
+            <el-button size="small" type="primary" :loading="faqStore.candidatesLoading" @click="loadCandidates">
+              挖掘候选
+            </el-button>
+          </span>
         </div>
       </template>
       <el-table
@@ -137,6 +147,7 @@ const faqStore = useFaqStore()
 
 const filterCategory = ref('')
 const filterKeyword = ref('')
+const minFrequency = ref(3)
 
 const dialogVisible = ref(false)
 const isEdit = ref(false)
@@ -197,7 +208,7 @@ async function handleDelete(id: number) {
 }
 
 function loadCandidates() {
-  faqStore.fetchCandidates(20)
+  faqStore.fetchCandidates(20, minFrequency.value)
 }
 
 function createFromCandidate(question: string) {
