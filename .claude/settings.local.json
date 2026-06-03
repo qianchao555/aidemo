@@ -9,7 +9,8 @@
       "Bash(javap *)",
       "Bash(python *)",
       "Bash(pip3 install *)",
-      "Bash(/c/softwareWork/anaconda/python.exe *)"
+      "Bash(/c/softwareWork/anaconda/python.exe *)",
+      "Bash(npx vue-tsc *)"
     ]
   }
 }

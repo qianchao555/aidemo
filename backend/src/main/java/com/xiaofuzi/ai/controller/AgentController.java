@@ -1,6 +1,7 @@
 package com.xiaofuzi.ai.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xiaofuzi.ai.context.UserContext;
 import com.xiaofuzi.ai.dto.ContentChatRequest;
 import com.xiaofuzi.ai.dto.SessionSummary;
 import com.xiaofuzi.ai.entity.ChatHistory;
@@ -52,7 +53,7 @@ public class AgentController {
     public Result<String> ragQaChat(@RequestBody ContentChatRequest contentChatRequest) {
         String message = contentChatRequest.getUserMessage();
         String threadId = contentChatRequest.getThreadId();
-        Long userId = contentChatRequest.getUserId();
+        Long userId = UserContext.get().getId();
         String response = ragQaAgentService.ask(threadId, userId, message);
         return Result.success(response);
     }
@@ -67,7 +68,7 @@ public class AgentController {
 
         SseEmitter emitter = new SseEmitter(180_000L);
         final String finalThreadId = threadId;
-        final Long finalUserId = request.getUserId();
+        final Long finalUserId = UserContext.get().getId();
 
         sseExecutor.execute(() -> {
             try {
@@ -118,7 +119,7 @@ public class AgentController {
     public Result<SessionSummary> createSession(@RequestBody Map<String, Object> body) {
         String threadId = (String) body.getOrDefault("threadId", UUID.randomUUID().toString());
         String title = (String) body.getOrDefault("title", "新对话");
-        Long userId = body.get("userId") != null ? ((Number) body.get("userId")).longValue() : null;
+        Long userId = UserContext.get().getId();
 
         ChatSession session = ChatSession.builder()
                 .threadId(threadId)
@@ -139,7 +140,8 @@ public class AgentController {
     }
 
     @GetMapping("/sessions")
-    public Result<List<SessionSummary>> listSessions(@RequestParam Long userId) {
+    public Result<List<SessionSummary>> listSessions() {
+        Long userId = UserContext.get().getId();
         List<ChatSession> sessions = chatSessionMapper.findByUserId(userId);
 
         List<SessionSummary> summaries = sessions.stream()
@@ -162,6 +164,14 @@ public class AgentController {
 
     @DeleteMapping("/sessions/{threadId}")
     public Result<Map<String, Object>> deleteSession(@PathVariable String threadId) {
+        ChatSession session = chatSessionMapper.findByThreadId(threadId);
+        if (session == null) {
+            return Result.error("会话不存在");
+        }
+        Long currentUserId = UserContext.get().getId();
+        if (!currentUserId.equals(session.getUserId())) {
+            return Result.error("无权操作此会话");
+        }
         chatHistoryMapper.deleteByThreadId(threadId);
         chatSessionMapper.deleteByThreadId(threadId);
         logger.info("会话已删除: threadId={}", threadId);

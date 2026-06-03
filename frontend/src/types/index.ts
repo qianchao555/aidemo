@@ -118,6 +118,22 @@ export interface ChatUser {
   id: number
   username: string
   displayName: string
+  role?: string
+}
+
+/** 登录请求 */
+export interface LoginRequest {
+  username: string
+  password: string
+}
+
+/** 登录响应 */
+export interface LoginResponse {
+  userId: number
+  username: string
+  displayName: string
+  role: string
+  token: string
 }
 
 /** 引用来源（ChatMessage 扩展字段） */

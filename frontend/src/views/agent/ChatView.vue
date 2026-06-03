@@ -12,22 +12,6 @@
         />
       </div>
       <template v-if="!sidebarCollapsed">
-        <div class="user-switcher">
-          <el-select
-            v-model="chatStore.currentUserId"
-            placeholder="选择用户"
-            size="small"
-            style="width: 100%"
-            @change="handleSwitchUser"
-          >
-            <el-option
-              v-for="user in chatStore.users"
-              :key="user.id"
-              :label="user.displayName"
-              :value="user.id"
-            />
-          </el-select>
-        </div>
         <el-button type="primary" style="width: 100%; margin-bottom: 10px" @click="newChat">
           <el-icon><Plus /></el-icon> 新建对话
         </el-button>
@@ -244,7 +228,7 @@ async function handleSend() {
   sending.value = true
 
   try {
-    const response = await ragQaChatStream({ userMessage: text, threadId, userId: chatStore.currentUserId })
+    const response = await ragQaChatStream({ userMessage: text, threadId })
 
     if (!response.ok || !response.body) {
       throw new Error('SSE not supported')
@@ -278,7 +262,7 @@ async function handleSend() {
     // 流式失败降级为非流式
     chatStore.appendContent(threadId, assistantMsgId, '')
     try {
-      const response = await ragQaChat({ userMessage: text, threadId, userId: chatStore.currentUserId })
+      const response = await ragQaChat({ userMessage: text, threadId })
       const msgs = chatStore.messages[threadId]
       if (msgs) {
         const msg = msgs.find(m => m.id === assistantMsgId)
@@ -344,10 +328,6 @@ function newChat() {
   chatStore.createSession()
 }
 
-function handleSwitchUser(userId: number) {
-  chatStore.switchUser(userId)
-}
-
 function quickStart(question: string) {
   if (!chatStore.hasCurrentSession) {
     chatStore.createSession()
@@ -365,13 +345,10 @@ watch(() => route.query.q, (q) => {
 }, { immediate: true })
 
 onMounted(async () => {
-  await chatStore.fetchUsers()
-  if (chatStore.currentUserId) {
-    await chatStore.fetchSessions()
-    if (chatStore.sessions.length > 0) {
-      const lastSession = chatStore.sessions[0]
-      await chatStore.switchSession(lastSession.threadId)
-    }
+  await chatStore.fetchSessions()
+  if (chatStore.sessions.length > 0) {
+    const lastSession = chatStore.sessions[0]
+    await chatStore.switchSession(lastSession.threadId)
   }
 })
 </script>
@@ -386,7 +363,6 @@ onMounted(async () => {
 }
 .session-panel.collapsed { width: 50px; padding: 12px 8px; }
 .session-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: 600; }
-.user-switcher { margin-bottom: 8px; }
 .session-list { flex: 1; overflow-y: auto; }
 .session-item {
   display: flex; align-items: center; justify-content: space-between;

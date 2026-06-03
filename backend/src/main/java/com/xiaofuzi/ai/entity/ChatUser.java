@@ -20,4 +20,10 @@ public class ChatUser {
     private String displayName;
 
     private LocalDateTime createTime;
+
+    private String passwordHash;
+
+    private String authToken;
+
+    private String role;
 }

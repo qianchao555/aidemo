@@ -1,5 +1,6 @@
 package com.xiaofuzi.ai.controller;
 
+import com.xiaofuzi.ai.annotation.RequireRole;
 import com.xiaofuzi.ai.rag.KnowledgeBaseService;
 import com.xiaofuzi.ai.vo.Result;
 import org.slf4j.Logger;
@@ -23,6 +24,7 @@ public class KnowledgeBaseController {
         this.knowledgeBaseService = knowledgeBaseService;
     }
 
+    @RequireRole("admin")
     @PostMapping("/upload")
     public Result<Map<String, Object>> uploadFile(
             @RequestParam("file") MultipartFile file,

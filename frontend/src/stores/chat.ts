@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { ChatMessage, ChatHistoryDto, SessionSummary, MessageSource, ChatUser } from '@/types'
-import { listUsers, createSessionApi, listSessions, getSessionHistory, deleteSessionApi } from '@/api/agent'
+import type { ChatMessage, ChatHistoryDto, SessionSummary, MessageSource } from '@/types'
+import { createSessionApi, listSessions, getSessionHistory, deleteSessionApi } from '@/api/agent'
 
 export const useChatStore = defineStore('chat', () => {
   const sessions = ref<SessionSummary[]>([])
@@ -9,37 +9,10 @@ export const useChatStore = defineStore('chat', () => {
   const messages = ref<Record<string, ChatMessage[]>>({})
   const loadingSessions = ref(false)
 
-  const users = ref<ChatUser[]>([])
-  const currentUserId = ref<number>(
-    Number(localStorage.getItem('currentUserId')) || 0
-  )
-
-  async function fetchUsers() {
-    try {
-      users.value = await listUsers()
-      if (users.value.length > 0 && !currentUserId.value) {
-        currentUserId.value = users.value[0].id
-        localStorage.setItem('currentUserId', String(currentUserId.value))
-      }
-    } catch {
-      // 用户列表加载失败不影响其他功能
-    }
-  }
-
-  function switchUser(userId: number) {
-    currentUserId.value = userId
-    localStorage.setItem('currentUserId', String(userId))
-    currentThreadId.value = ''
-    messages.value = {}
-    sessions.value = []
-    fetchSessions()
-  }
-
   async function fetchSessions() {
-    if (!currentUserId.value) return
     loadingSessions.value = true
     try {
-      sessions.value = await listSessions(currentUserId.value)
+      sessions.value = await listSessions()
       localStorage.setItem('chatSessions', JSON.stringify(sessions.value))
     } catch {
       const cached = localStorage.getItem('chatSessions')
@@ -102,7 +75,7 @@ export const useChatStore = defineStore('chat', () => {
     localStorage.setItem('currentThreadId', currentThreadId.value)
 
     try {
-      await createSessionApi(threadId, currentUserId.value)
+      await createSessionApi(threadId)
     } catch {
       // 后端失败时前端仍保留本地会话，下次 fetchSessions 会同步
     }
@@ -203,9 +176,7 @@ export const useChatStore = defineStore('chat', () => {
 
   return {
     sessions, currentThreadId, messages, loadingSessions,
-    users, currentUserId,
     currentMessages, hasCurrentSession,
-    fetchUsers, switchUser,
     fetchSessions, createSession, switchSession, deleteSession,
     addMessage, appendContent, finishMessage, addSource
   }

@@ -1,5 +1,6 @@
 package com.xiaofuzi.ai.controller;
 
+import com.xiaofuzi.ai.annotation.RequireRole;
 import com.xiaofuzi.ai.entity.ChatUser;
 import com.xiaofuzi.ai.mapper.ChatUserMapper;
 import com.xiaofuzi.ai.vo.Result;
@@ -17,7 +18,8 @@ public class UserController {
         this.chatUserMapper = chatUserMapper;
     }
 
-    /** 获取所有用户列表（模拟多用户，无需登录） */
+    /** 获取所有用户列表（仅管理员） */
+    @RequireRole("admin")
     @GetMapping
     public Result<List<ChatUser>> listUsers() {
         return Result.success(chatUserMapper.findAll());
