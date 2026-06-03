@@ -10,7 +10,9 @@
       "Bash(python *)",
       "Bash(pip3 install *)",
       "Bash(/c/softwareWork/anaconda/python.exe *)",
-      "Bash(npx vue-tsc *)"
+      "Bash(npx vue-tsc *)",
+      "Bash(git commit -m ' *)",
+      "Bash(npm run *)"
     ]
   }
 }

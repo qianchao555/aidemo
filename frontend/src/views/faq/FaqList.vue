@@ -1,5 +1,11 @@
 <template>
   <div class="faq-list-page">
+    <!-- Tab 导航 -->
+    <div class="faq-tabs">
+      <span class="faq-tab active">FAQ 列表</span>
+      <span class="faq-tab" @click="router.push('/faq/high-freq')">高频 FAQ</span>
+    </div>
+
     <!-- 顶部操作栏 -->
     <div class="toolbar">
       <div class="toolbar-left">
@@ -138,10 +144,13 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useFaqStore } from '@/stores/faq'
 import type { FaqEntry } from '@/types'
+
+const router = useRouter()
 
 const faqStore = useFaqStore()
 
@@ -241,5 +250,33 @@ onMounted(() => {
 .toolbar-left {
   display: flex;
   align-items: center;
+}
+
+.faq-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--border-base);
+}
+
+.faq-tab {
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.15s;
+  user-select: none;
+}
+
+.faq-tab:hover {
+  color: var(--text-secondary);
+}
+
+.faq-tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
 }
 </style>
