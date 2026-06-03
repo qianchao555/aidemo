@@ -21,7 +21,7 @@ export const ragQaChatStream = (data: ChatParams): Promise<Response> =>
 
 /** 获取用户列表 */
 export const listUsers = () =>
-  get<ChatUser[]>('/agent/users')
+  get<ChatUser[]>('/user')
 
 /** 创建会话 */
 export const createSessionApi = (threadId: string, userId: number, title?: string) =>

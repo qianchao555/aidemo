@@ -5,11 +5,9 @@ import com.xiaofuzi.ai.dto.ContentChatRequest;
 import com.xiaofuzi.ai.dto.SessionSummary;
 import com.xiaofuzi.ai.entity.ChatHistory;
 import com.xiaofuzi.ai.entity.ChatSession;
-import com.xiaofuzi.ai.entity.ChatUser;
 import com.xiaofuzi.ai.mapper.ChatHistoryMapper;
 import com.xiaofuzi.ai.hook.RagQaMessageHook;
 import com.xiaofuzi.ai.mapper.ChatSessionMapper;
-import com.xiaofuzi.ai.mapper.ChatUserMapper;
 import com.xiaofuzi.ai.service.RagQaAgentService;
 import com.xiaofuzi.ai.vo.Result;
 import org.slf4j.Logger;
@@ -35,7 +33,6 @@ public class AgentController {
     private final RagQaAgentService ragQaAgentService;
     private final ChatHistoryMapper chatHistoryMapper;
     private final ChatSessionMapper chatSessionMapper;
-    private final ChatUserMapper chatUserMapper;
     private final RagQaMessageHook ragQaMessageHook;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -44,12 +41,10 @@ public class AgentController {
     public AgentController(RagQaAgentService ragQaAgentService,
                            ChatHistoryMapper chatHistoryMapper,
                            ChatSessionMapper chatSessionMapper,
-                           ChatUserMapper chatUserMapper,
                            RagQaMessageHook ragQaMessageHook) {
         this.ragQaAgentService = ragQaAgentService;
         this.chatHistoryMapper = chatHistoryMapper;
         this.chatSessionMapper = chatSessionMapper;
-        this.chatUserMapper = chatUserMapper;
         this.ragQaMessageHook = ragQaMessageHook;
     }
 
@@ -117,11 +112,6 @@ public class AgentController {
         });
 
         return emitter;
-    }
-
-    @GetMapping("/users")
-    public Result<List<ChatUser>> listUsers() {
-        return Result.success(chatUserMapper.findAll());
     }
 
     @PostMapping("/sessions")
