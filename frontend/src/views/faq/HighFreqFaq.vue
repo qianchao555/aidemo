@@ -58,13 +58,64 @@ onMounted(() => fetchData())
 </script>
 
 <style scoped>
-.high-freq-page { background: #fff; padding: 20px; border-radius: 4px; }
-.toolbar { display: flex; align-items: center; margin-bottom: 20px; }
-.label { font-size: 14px; color: #606266; white-space: nowrap; }
-.card-list { display: flex; flex-direction: column; gap: 12px; }
-.faq-card { cursor: pointer; }
-.card-header { display: flex; align-items: center; gap: 12px; }
-.rank-badge { flex-shrink: 0; }
-.question { flex: 1; font-size: 15px; font-weight: 500; }
-.answer { margin-top: 12px; padding: 10px; background: #f5f7fa; border-radius: 4px; font-size: 14px; color: #333; line-height: 1.7; }
+.high-freq-page {
+  background: var(--white);
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.faq-card {
+  cursor: pointer;
+  border-radius: var(--radius-md) !important;
+}
+
+.faq-card:hover {
+  border-color: var(--primary) !important;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rank-badge {
+  flex-shrink: 0;
+}
+
+.question {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.answer {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--surface-warm);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
 </style>

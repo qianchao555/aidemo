@@ -224,7 +224,22 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.faq-list-page { background: #fff; padding: 20px; border-radius: 4px; }
-.toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.toolbar-left { display: flex; align-items: center; }
+.faq-list-page {
+  background: var(--white);
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+}
 </style>
