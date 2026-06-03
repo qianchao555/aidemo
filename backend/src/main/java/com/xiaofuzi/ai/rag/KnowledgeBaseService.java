@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xiaofuzi.ai.rag.parser.DocumentParser;
 import com.xiaofuzi.ai.rag.parser.DocumentParserFactory;
 import com.xiaofuzi.ai.rag.parser.HeadingChunker;
+import com.xiaofuzi.ai.rag.parser.ProcessChunker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ChatModel;
@@ -169,24 +170,45 @@ public class KnowledgeBaseService {
         logger.info("文档导入完成: {} 个解析单元 -> {} 个向量分块", parsedDocs.size(), allChunks.size());
     }
 
-    /** 优先使用标题结构切分（中文制度文档），检测不到标题时回退到 TokenTextSplitter。 */
+    /**
+     * 策略链切分：标题结构 → 流程结构 → TokenTextSplitter 兜底。
+     * 制度文档和流程文档的文本结构不同，依次尝试两种专用切分器，都未命中再用通用切分。
+     */
     private List<Document> chunkWithHeadingFallback(Document doc) {
         String contentType = (String) doc.getMetadata().getOrDefault("content_type", "unknown");
-        List<Document> headingChunks = HeadingChunker.chunk(doc.getText(), contentType);
+        String text = doc.getText();
 
-        boolean hasHeadings = headingChunks.size() > 1
-                || (headingChunks.size() == 1
-                        && headingChunks.get(0).getMetadata() != null
-                        && headingChunks.get(0).getMetadata().get("heading_path") instanceof String s
-                        && !s.isEmpty());
-
-        if (hasHeadings) {
+        // 第一优先：标题结构切分（制度文档的"章/节/条/款"模式）
+        List<Document> headingChunks = HeadingChunker.chunk(text, contentType);
+        if (hasStructure(headingChunks, "heading_path")) {
             for (Document hc : headingChunks) {
                 hc.getMetadata().putAll(doc.getMetadata());
             }
             return headingChunks;
         }
+
+        // 第二优先：流程结构切分（流程文档的"第N步/角色/时限/材料"模式）
+        List<Document> processChunks = ProcessChunker.chunk(text, contentType);
+        if (hasStructure(processChunks, "step_title")) {
+            for (Document pc : processChunks) {
+                pc.getMetadata().putAll(doc.getMetadata());
+            }
+            return processChunks;
+        }
+
+        // 兜底：通用 Token 切分
         return textSplitter.apply(List.of(doc));
+    }
+
+    /** 判断切分结果是否检测到了结构：至少一个有非空结构标记的 chunk。 */
+    private static boolean hasStructure(List<Document> chunks, String markerKey) {
+        if (chunks.size() > 1) return true;
+        if (chunks.size() == 1) {
+            Object val = chunks.get(0).getMetadata() != null
+                    ? chunks.get(0).getMetadata().get(markerKey) : null;
+            return val instanceof String s && !s.isEmpty();
+        }
+        return false;
     }
 
     private void batchAdd(List<Document> documents, Long documentId) {
@@ -273,6 +295,9 @@ public class KnowledgeBaseService {
             merged = llmRerank(query, merged, 3);
         }
 
+        // 5. 去重：同文档同章节/同步骤的 chunk 只保留排名最高的那条
+        merged = deduplicateByStructure(merged);
+
         Map<String, Object> result = new HashMap<>();
         result.put("documents", merged);
         result.put("vectorCount", vectorResults.size());
@@ -290,6 +315,61 @@ public class KnowledgeBaseService {
                 .filter(d -> d.getMetadata() == null
                         || !"faq_entry".equals(d.getMetadata().get("content_type")))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 按文档 + 结构路径去重，同名文档同一章节/同一步骤只保留排名最高的那条。
+     * 去重 key = source 文档名 + heading_path（制度文档）或 step_title（流程文档）。
+     * 无结构标记的 chunk 不做去重，保留全部。
+     */
+    private List<Document> deduplicateByStructure(List<Document> docs) {
+        Map<String, Document> seen = new LinkedHashMap<>();
+        for (Document doc : docs) {
+            String source = doc.getMetadata() != null
+                    ? (String) doc.getMetadata().getOrDefault("source", "") : "";
+
+            // 制度文档用 heading_path，流程文档用 step_title
+            String structKey = "";
+            if (doc.getMetadata() != null) {
+                String headingPath = (String) doc.getMetadata().get("heading_path");
+                String stepTitle = (String) doc.getMetadata().get("step_title");
+                if (headingPath != null && !headingPath.isBlank()) {
+                    structKey = headingPath;
+                } else if (stepTitle != null && !stepTitle.isBlank()) {
+                    structKey = stepTitle;
+                }
+            }
+
+            String dedupKey = source + "|" + structKey;
+
+            // 无结构标记的 chunk 不参与去重，直接保留
+            if (structKey.isEmpty()) {
+                continue;
+            }
+
+            // 同 key 只保留第一个（排名最高）
+            seen.putIfAbsent(dedupKey, doc);
+        }
+
+        if (seen.isEmpty()) return docs;
+
+        // 重建列表：保留去重后的结构化 chunk + 所有无结构 chunk
+        List<Document> result = new ArrayList<>(seen.values());
+        for (Document doc : docs) {
+            String source = doc.getMetadata() != null
+                    ? (String) doc.getMetadata().getOrDefault("source", "") : "";
+            String headingPath = doc.getMetadata() != null
+                    ? (String) doc.getMetadata().get("heading_path") : null;
+            String stepTitle = doc.getMetadata() != null
+                    ? (String) doc.getMetadata().get("step_title") : null;
+            boolean hasStruct = (headingPath != null && !headingPath.isBlank())
+                    || (stepTitle != null && !stepTitle.isBlank());
+            if (!hasStruct) {
+                result.add(doc);
+            }
+        }
+        logger.info("引用去重: {} 条 → {} 条（去除同文档同结构重复）", docs.size(), result.size());
+        return result;
     }
 
     /**

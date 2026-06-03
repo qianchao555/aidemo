@@ -6,7 +6,10 @@
       "Bash(mvn dependency:tree -Dincludes=org.springframework.ai)",
       "Bash(mvn dependency:tree -Dincludes=org.springframework.ai:spring-ai-core)",
       "Bash(jar tf *)",
-      "Bash(javap *)"
+      "Bash(javap *)",
+      "Bash(python *)",
+      "Bash(pip3 install *)",
+      "Bash(/c/softwareWork/anaconda/python.exe *)"
     ]
   }
 }
