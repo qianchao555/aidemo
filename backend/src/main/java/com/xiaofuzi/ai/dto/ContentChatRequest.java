@@ -27,4 +27,6 @@ public class ContentChatRequest {
 
 
     private String threadId;
+
+    private Long userId;
 }

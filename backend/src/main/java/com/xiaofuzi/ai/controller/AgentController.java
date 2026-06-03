@@ -4,7 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xiaofuzi.ai.dto.ContentChatRequest;
 import com.xiaofuzi.ai.dto.SessionSummary;
 import com.xiaofuzi.ai.entity.ChatHistory;
+import com.xiaofuzi.ai.entity.ChatSession;
+import com.xiaofuzi.ai.entity.ChatUser;
 import com.xiaofuzi.ai.mapper.ChatHistoryMapper;
+import com.xiaofuzi.ai.mapper.ChatSessionMapper;
+import com.xiaofuzi.ai.mapper.ChatUserMapper;
 import com.xiaofuzi.ai.service.RagQaAgentService;
 import com.xiaofuzi.ai.vo.Result;
 import org.slf4j.Logger;
@@ -14,7 +18,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.time.LocalDateTime;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -30,21 +33,28 @@ public class AgentController {
 
     private final RagQaAgentService ragQaAgentService;
     private final ChatHistoryMapper chatHistoryMapper;
+    private final ChatSessionMapper chatSessionMapper;
+    private final ChatUserMapper chatUserMapper;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ExecutorService sseExecutor = Executors.newCachedThreadPool();
 
     public AgentController(RagQaAgentService ragQaAgentService,
-                           ChatHistoryMapper chatHistoryMapper) {
+                           ChatHistoryMapper chatHistoryMapper,
+                           ChatSessionMapper chatSessionMapper,
+                           ChatUserMapper chatUserMapper) {
         this.ragQaAgentService = ragQaAgentService;
         this.chatHistoryMapper = chatHistoryMapper;
+        this.chatSessionMapper = chatSessionMapper;
+        this.chatUserMapper = chatUserMapper;
     }
 
     @PostMapping("/rag-qa/chat")
     public Result<String> ragQaChat(@RequestBody ContentChatRequest contentChatRequest) {
         String message = contentChatRequest.getUserMessage();
         String threadId = contentChatRequest.getThreadId();
-        String response = ragQaAgentService.ask(threadId, message);
+        Long userId = contentChatRequest.getUserId();
+        String response = ragQaAgentService.ask(threadId, userId, message);
         return Result.success(response);
     }
 
@@ -58,6 +68,7 @@ public class AgentController {
 
         SseEmitter emitter = new SseEmitter(180_000L);
         final String finalThreadId = threadId;
+        final Long finalUserId = request.getUserId();
 
         sseExecutor.execute(() -> {
             try {
@@ -66,7 +77,7 @@ public class AgentController {
                         Map.of("type", "thinking", "content", "正在检索知识库..."));
                 emitter.send(SseEmitter.event().name("thinking").data(thinkingJson));
 
-                String response = ragQaAgentService.ask(finalThreadId, userMessage);
+                String response = ragQaAgentService.ask(finalThreadId, finalUserId, userMessage);
 
                 // 按句拆分逐句发送
                 String[] segments = response.split("(?<=[。！？\\n])");
@@ -96,40 +107,49 @@ public class AgentController {
         return emitter;
     }
 
+    @GetMapping("/users")
+    public Result<List<ChatUser>> listUsers() {
+        return Result.success(chatUserMapper.findAll());
+    }
+
+    @PostMapping("/sessions")
+    public Result<SessionSummary> createSession(@RequestBody Map<String, Object> body) {
+        String threadId = (String) body.getOrDefault("threadId", UUID.randomUUID().toString());
+        String title = (String) body.getOrDefault("title", "新对话");
+        Long userId = body.get("userId") != null ? ((Number) body.get("userId")).longValue() : null;
+
+        ChatSession session = ChatSession.builder()
+                .threadId(threadId)
+                .userId(userId)
+                .title(title)
+                .messageCount(0)
+                .createTime(LocalDateTime.now())
+                .updateTime(LocalDateTime.now())
+                .build();
+        chatSessionMapper.insert(session);
+
+        return Result.success(SessionSummary.builder()
+                .threadId(threadId)
+                .title(title)
+                .messageCount(0)
+                .lastUpdateTime(session.getUpdateTime())
+                .build());
+    }
+
     @GetMapping("/sessions")
-    public Result<List<SessionSummary>> listSessions() {
-        List<ChatHistory> allHistory = chatHistoryMapper.findAllThreadIds();
+    public Result<List<SessionSummary>> listSessions(@RequestParam Long userId) {
+        List<ChatSession> sessions = chatSessionMapper.findByUserId(userId);
 
-        Map<String, List<ChatHistory>> grouped = allHistory.stream()
-                .collect(Collectors.groupingBy(ChatHistory::getThreadId));
-
-        List<SessionSummary> sessions = grouped.entrySet().stream()
-                .map(entry -> {
-                    String tid = entry.getKey();
-                    List<ChatHistory> msgs = entry.getValue();
-                    String title = msgs.stream()
-                            .filter(h -> "user".equals(h.getRole()))
-                            .findFirst()
-                            .map(h -> {
-                                String c = h.getContent();
-                                return c != null && c.length() > 30 ? c.substring(0, 30) + "..." : c;
-                            })
-                            .orElse("空会话");
-                    LocalDateTime lastTime = msgs.stream()
-                            .map(ChatHistory::getCreateTime)
-                            .max(Comparator.naturalOrder())
-                            .orElse(LocalDateTime.now());
-                    return SessionSummary.builder()
-                            .threadId(tid)
-                            .title(title)
-                            .messageCount(msgs.size())
-                            .lastUpdateTime(lastTime)
-                            .build();
-                })
-                .sorted((a, b) -> b.getLastUpdateTime().compareTo(a.getLastUpdateTime()))
+        List<SessionSummary> summaries = sessions.stream()
+                .map(s -> SessionSummary.builder()
+                        .threadId(s.getThreadId())
+                        .title(s.getTitle())
+                        .messageCount(s.getMessageCount())
+                        .lastUpdateTime(s.getUpdateTime())
+                        .build())
                 .collect(Collectors.toList());
 
-        return Result.success(sessions);
+        return Result.success(summaries);
     }
 
     @GetMapping("/sessions/{threadId}/history")
@@ -141,6 +161,7 @@ public class AgentController {
     @DeleteMapping("/sessions/{threadId}")
     public Result<Map<String, Object>> deleteSession(@PathVariable String threadId) {
         chatHistoryMapper.deleteByThreadId(threadId);
+        chatSessionMapper.deleteByThreadId(threadId);
         logger.info("会话已删除: threadId={}", threadId);
         return Result.success(Map.of("success", true, "message", "会话已删除"));
     }

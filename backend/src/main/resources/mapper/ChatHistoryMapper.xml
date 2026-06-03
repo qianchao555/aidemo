@@ -41,4 +41,13 @@
         ORDER BY thread_id, create_time DESC
     </select>
 
+    <select id="findUserQueryFrequencies" resultType="java.util.HashMap">
+        SELECT TRIM(content) AS query, COUNT(*) AS cnt
+        FROM chat_history
+        WHERE role = 'user'
+        GROUP BY TRIM(content)
+        HAVING COUNT(*) >= 2
+        ORDER BY cnt DESC
+    </select>
+
 </mapper>

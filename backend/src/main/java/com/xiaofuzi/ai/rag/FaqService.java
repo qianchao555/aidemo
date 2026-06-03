@@ -2,6 +2,7 @@ package com.xiaofuzi.ai.rag;
 
 import com.xiaofuzi.ai.entity.FaqEntry;
 import com.xiaofuzi.ai.mapper.FaqEntryMapper;
+import com.xiaofuzi.ai.mapper.ChatHistoryMapper;
 import com.xiaofuzi.ai.dto.FaqMatchResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -9,10 +10,8 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
 
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class FaqService {
@@ -20,12 +19,15 @@ public class FaqService {
     private static final Logger logger = LoggerFactory.getLogger(FaqService.class);
 
     private final FaqEntryMapper faqEntryMapper;
+    private final ChatHistoryMapper chatHistoryMapper;
     private final KnowledgeBaseService knowledgeBaseService;
     private final VectorStore vectorStore;
 
-    public FaqService(FaqEntryMapper faqEntryMapper, KnowledgeBaseService knowledgeBaseService,
+    public FaqService(FaqEntryMapper faqEntryMapper, ChatHistoryMapper chatHistoryMapper,
+                      KnowledgeBaseService knowledgeBaseService,
                       VectorStore vectorStore) {
         this.faqEntryMapper = faqEntryMapper;
+        this.chatHistoryMapper = chatHistoryMapper;
         this.knowledgeBaseService = knowledgeBaseService;
         this.vectorStore = vectorStore;
     }
@@ -136,6 +138,42 @@ public class FaqService {
         return faqEntryMapper.findTopByHitCount(limit);
     }
 
+    /**
+     * FAQ 候选挖掘：从聊天记录中提取高频用户提问，过滤掉已被现有 FAQ 覆盖的，返回候选列表。
+     */
+    public List<Map<String, Object>> getFaqCandidates(int limit) {
+        List<Map<String, Object>> rawFreq = chatHistoryMapper.findUserQueryFrequencies();
+        if (rawFreq.isEmpty()) {
+            return List.of();
+        }
+
+        List<FaqEntry> existingFaqs = faqEntryMapper.findAllActive();
+        List<String> faqNormed = existingFaqs.stream()
+                .map(f -> normalize(f.getQuestion()))
+                .toList();
+
+        List<Map<String, Object>> candidates = new ArrayList<>();
+        for (Map<String, Object> row : rawFreq) {
+            String query = (String) row.get("query");
+            Object cnt = row.get("cnt");
+            if (query == null || query.isBlank()) continue;
+
+            String normed = normalize(query);
+            boolean alreadyCovered = faqNormed.stream().anyMatch(fn ->
+                    fn.equals(normed) || fn.contains(normed) || normed.contains(fn));
+            if (alreadyCovered) continue;
+
+            Map<String, Object> candidate = new LinkedHashMap<>();
+            candidate.put("question", query);
+            candidate.put("frequency", cnt instanceof Number ? ((Number) cnt).longValue() : 0L);
+            candidates.add(candidate);
+
+            if (candidates.size() >= limit) break;
+        }
+
+        logger.info("FAQ 候选挖掘: 原始 {} 条 → 候选 {} 条", rawFreq.size(), candidates.size());
+        return candidates;
+    }
 
     //高频问题，每次FAQ被命中时，增加hitCount计数，定期分析高频问题，优化FAQ库内容和结构
     private void incrementHitFaq(FaqEntry entry) {

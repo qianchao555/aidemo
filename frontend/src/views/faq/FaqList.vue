@@ -21,6 +21,48 @@
       <el-button type="primary" @click="openDialog()">新建 FAQ</el-button>
     </div>
 
+    <!-- FAQ 候选挖掘 -->
+    <el-card shadow="never" style="margin-bottom: 16px">
+      <template #header>
+        <div style="display: flex; justify-content: space-between; align-items: center">
+          <span>
+            <strong>FAQ 候选</strong>
+            <span style="color: #909399; font-size: 13px; margin-left: 8px">从聊天记录中挖掘的高频提问</span>
+          </span>
+          <el-button size="small" type="primary" :loading="faqStore.candidatesLoading" @click="loadCandidates">
+            挖掘候选
+          </el-button>
+        </div>
+      </template>
+      <el-table
+        v-if="faqStore.candidates.length > 0"
+        :data="faqStore.candidates"
+        size="small"
+        stripe
+        style="width: 100%"
+      >
+        <el-table-column type="index" label="#" width="50" />
+        <el-table-column prop="question" label="用户提问" min-width="300" show-overflow-tooltip />
+        <el-table-column prop="frequency" label="出现次数" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag type="warning" size="small">{{ row.frequency }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="120" align="center">
+          <template #default="{ row }">
+            <el-button type="primary" link size="small" @click="createFromCandidate(row.question)">
+              创建 FAQ
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <el-empty
+        v-else-if="!faqStore.candidatesLoading"
+        description="暂无候选，点击「挖掘候选」从聊天记录中发现高频问题"
+        :image-size="60"
+      />
+    </el-card>
+
     <!-- 表格 -->
     <el-table :data="faqStore.faqList" v-loading="faqStore.loading" stripe border style="width: 100%">
       <el-table-column prop="id" label="ID" width="60" />
@@ -152,6 +194,17 @@ async function handleSubmit() {
 async function handleDelete(id: number) {
   await faqStore.remove(id)
   ElMessage.success('FAQ 已删除')
+}
+
+function loadCandidates() {
+  faqStore.fetchCandidates(20)
+}
+
+function createFromCandidate(question: string) {
+  formData.value = { question, answer: '', keywords: '', category: '', status: 'active' }
+  isEdit.value = false
+  editId.value = null
+  dialogVisible.value = true
 }
 
 onMounted(() => {

@@ -77,3 +77,33 @@ ADD COLUMN IF NOT EXISTS document_id BIGINT;
 
 CREATE INDEX IF NOT EXISTS idx_vector_document_id
 ON xiaofuzi_knowledge_base_v2(document_id);
+
+-- 会话列表管理表
+CREATE TABLE IF NOT EXISTS chat_session (
+    id            BIGSERIAL PRIMARY KEY,
+    thread_id     VARCHAR(64)  NOT NULL UNIQUE,
+    user_id       BIGINT,
+    title         VARCHAR(256) NOT NULL DEFAULT '新对话',
+    message_count INT          NOT NULL DEFAULT 0,
+    create_time   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_cs_thread_id ON chat_session(thread_id);
+CREATE INDEX IF NOT EXISTS idx_cs_user_id ON chat_session(user_id);
+
+-- 用户表（模拟多用户，无需登录）
+CREATE TABLE IF NOT EXISTS chat_user (
+    id           BIGSERIAL PRIMARY KEY,
+    username     VARCHAR(64)  NOT NULL UNIQUE,
+    display_name VARCHAR(128) NOT NULL,
+    create_time  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 预置模拟用户（仅当表为空时插入）
+INSERT INTO chat_user (username, display_name)
+SELECT * FROM (VALUES
+    ('zhangsan', '张三'),
+    ('lisi', '李四'),
+    ('wangwu', '王五')
+) AS t(username, display_name)
+WHERE NOT EXISTS (SELECT 1 FROM chat_user);

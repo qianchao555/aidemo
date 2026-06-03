@@ -1,9 +1,10 @@
 import { get, post, del } from './request'
-import type { SessionSummary, ChatHistoryDto } from '@/types'
+import type { SessionSummary, ChatHistoryDto, ChatUser } from '@/types'
 
 export interface ChatParams {
   userMessage: string
   threadId?: string
+  userId?: number
 }
 
 /** 非流式 RAG 问答（保留兼容） */
@@ -18,9 +19,17 @@ export const ragQaChatStream = (data: ChatParams): Promise<Response> =>
     body: JSON.stringify(data)
   })
 
+/** 获取用户列表 */
+export const listUsers = () =>
+  get<ChatUser[]>('/agent/users')
+
+/** 创建会话 */
+export const createSessionApi = (threadId: string, userId: number, title?: string) =>
+  post<SessionSummary>('/agent/sessions', { threadId, userId, title: title || '新对话' })
+
 /** 获取会话列表 */
-export const listSessions = () =>
-  get<SessionSummary[]>('/agent/sessions')
+export const listSessions = (userId: number) =>
+  get<SessionSummary[]>('/agent/sessions', { userId })
 
 /** 获取会话历史消息 */
 export const getSessionHistory = (threadId: string) =>

@@ -70,4 +70,9 @@ public class FaqController {
         return Result.success(list);
     }
 
+    @GetMapping("/faq/candidates")
+    public Result<List<Map<String, Object>>> faqCandidates(@RequestParam(defaultValue = "20") int limit) {
+        return Result.success(faqService.getFaqCandidates(limit));
+    }
+
 }
