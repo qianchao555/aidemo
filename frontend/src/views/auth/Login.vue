@@ -5,9 +5,9 @@
 
     <div class="login-card">
       <div class="login-logo">
-        <div class="login-logo-icon">小</div>
+        <div class="login-logo-icon">Bot</div>
       </div>
-      <h2 class="login-title">制度知识库助手</h2>
+      <h2 class="login-title">制度问答与流程指引助手</h2>
       <p class="login-subtitle">登录您的账号</p>
 
       <el-form
@@ -30,7 +30,7 @@
         </el-form-item>
       </el-form>
 
-      <p class="login-hint">默认账号：zhangsan / lisi / wangwu，密码：123456</p>
+<!--      <p class="login-hint">默认账号：zhangsan / lisi / wangwu，密码：123456</p>-->
     </div>
   </div>
 </template>

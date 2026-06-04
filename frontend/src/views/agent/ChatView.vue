@@ -71,9 +71,8 @@
           >
             <div class="message-bubble" :class="msg.role">
               <div class="message-content" v-html="renderContent(msg.content)" />
-
-              <div v-if="msg.role === 'assistant' && msg.sources?.length" class="citation-trigger">
-                <el-popover placement="right" :width="380" trigger="click">
+              <div v-if="msg.role === 'assistant' && msg.sources?.length" class="citation-row">
+                <el-popover placement="bottom-end" :width="420" trigger="click">
                   <template #reference>
                     <el-button size="small" text type="primary" :icon="Document" class="citation-btn">
                       引用出处 ({{ msg.sources.length }})
@@ -120,8 +119,6 @@
                   </div>
                 </el-popover>
               </div>
-
-              <div class="message-time">{{ formatTime(msg.timestamp) }}</div>
             </div>
           </div>
           <div v-if="sending" class="message-row assistant">
@@ -366,7 +363,7 @@ onMounted(async () => {
 /* ===== Chat Page Layout ===== */
 .chat-page {
   display: flex;
-  height: calc(100vh - 80px);
+  height: calc(100vh - 32px);
   background: var(--white);
   border-radius: var(--radius-lg);
   overflow: hidden;
@@ -555,45 +552,75 @@ onMounted(async () => {
 .message-row.assistant { justify-content: flex-start; }
 
 .message-bubble {
-  max-width: 72%;
-  padding: 12px 16px;
+  max-width: 75%;
+  padding: 14px 18px;
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.7;
 }
 
 .message-bubble.user {
   background: var(--primary);
   color: white;
-  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-sm) var(--radius-lg);
+  border-radius: var(--radius-lg) var(--radius-lg) 4px var(--radius-lg);
+  width: fit-content;
+  max-width: 42%;
+  padding: 8px 12px;
 }
 
 .message-bubble.assistant {
-  background: var(--page-bg);
+  background: var(--white);
   color: var(--text-primary);
-  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-sm);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) 4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  max-width: 75%;
+  padding: 14px 18px;
 }
 
-.message-time {
-  font-size: 11px;
-  margin-top: 6px;
-  opacity: 0.6;
+/* Citation row — inside answer bubble, right-aligned */
+.citation-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-light);
 }
 
 .message-bubble.user .message-content :deep(p) { margin: 0; }
-.message-bubble.assistant .message-content :deep(p) { margin: 4px 0; }
+.message-bubble.user .message-content { color: white; }
+.message-bubble.assistant .message-content :deep(p) { margin: 6px 0; }
+.message-bubble.assistant .message-content :deep(p:first-child) { margin-top: 0; }
+.message-bubble.assistant .message-content :deep(p:last-child) { margin-bottom: 0; }
+.message-bubble.assistant .message-content :deep(ul),
+.message-bubble.assistant .message-content :deep(ol) {
+  padding-left: 20px;
+  margin: 6px 0;
+}
+.message-bubble.assistant .message-content :deep(li) {
+  margin: 2px 0;
+}
 .message-bubble.assistant .message-content :deep(pre) {
-  background: #e8eaed;
-  padding: 10px;
-  border-radius: 6px;
+  background: #f4f5f7;
+  padding: 12px 14px;
+  border-radius: 8px;
   overflow-x: auto;
-  font-size: 12px;
-  margin: 8px 0;
+  font-size: 13px;
+  margin: 10px 0;
+  border: 1px solid var(--border-light);
 }
 .message-bubble.assistant .message-content :deep(code) {
-  background: #e8eaed;
-  padding: 1px 4px;
-  border-radius: 3px;
+  background: rgba(232, 112, 64, 0.08);
+  color: var(--primary);
+  padding: 2px 5px;
+  border-radius: 4px;
   font-size: 12px;
+  font-weight: 500;
+}
+.message-bubble.assistant .message-content :deep(pre code) {
+  background: transparent;
+  color: var(--text-primary);
+  padding: 0;
+  font-weight: 400;
 }
 
 /* Typing animation */
@@ -614,12 +641,10 @@ onMounted(async () => {
 }
 
 /* Citation */
-.citation-trigger {
-  margin-top: 6px;
-}
-
 .citation-btn {
   font-size: 12px !important;
+  padding: 2px 4px !important;
+  color: var(--primary) !important;
 }
 
 .popover-content {

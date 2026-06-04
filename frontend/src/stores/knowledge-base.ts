@@ -2,7 +2,8 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import {
   ingestText, ingestFile, uploadFile, searchKnowledge, getStats,
-  listDocuments, reingestDocument, deleteDocument
+  listDocuments, reingestDocument, deleteDocument,
+  type DocumentListParams
 } from '@/api/knowledge-base'
 import type { IngestRequest, IngestFileRequest, KnowledgeDocument } from '@/types'
 
@@ -16,12 +17,15 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
 
   // --- 文档管理 ---
   const documentList = ref<KnowledgeDocument[]>([])
+  const documentTotal = ref(0)
   const documentLoading = ref(false)
 
-  async function fetchDocuments(params?: { category?: string; status?: string }) {
+  async function fetchDocuments(params?: DocumentListParams) {
     documentLoading.value = true
     try {
-      documentList.value = await listDocuments(params)
+      const res = await listDocuments(params)
+      documentList.value = res.list
+      documentTotal.value = res.total
     } finally {
       documentLoading.value = false
     }
@@ -100,7 +104,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
 
   return {
     searchResult, hitCount, docCount, chunkCount, categoryStats, loading,
-    documentList, documentLoading,
+    documentList, documentTotal, documentLoading,
     ingest, ingestByPath, upload, search, fetchStats,
     fetchDocuments, removeDocument, reingest
   }

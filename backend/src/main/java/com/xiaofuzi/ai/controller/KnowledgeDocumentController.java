@@ -1,6 +1,7 @@
 package com.xiaofuzi.ai.controller;
 
 import com.xiaofuzi.ai.annotation.RequireRole;
+import com.xiaofuzi.ai.dto.PageResult;
 import com.xiaofuzi.ai.entity.KnowledgeDocument;
 import com.xiaofuzi.ai.mapper.KnowledgeDocumentMapper;
 import com.xiaofuzi.ai.rag.KnowledgeBaseService;
@@ -13,6 +14,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/knowledge-base/documents")
@@ -29,15 +31,51 @@ public class KnowledgeDocumentController {
         this.knowledgeBaseService = knowledgeBaseService;
     }
 
+    private static final Set<String> ALLOWED_SORT_COLUMNS = Set.of(
+            "id", "documentName", "documentType", "category",
+            "chunkCount", "status", "createTime", "updateTime"
+    );
+
+    private static final java.util.Map<String, String> SORT_COLUMN_MAPPING = java.util.Map.of(
+            "documentName", "document_name",
+            "documentType", "document_type",
+            "chunkCount", "chunk_count",
+            "createTime", "create_time",
+            "updateTime", "update_time"
+    );
+
     /**
-     * 获取文档列表，支持按 category / status 过滤。
+     * 获取文档列表（分页），支持 keyword 搜索、category/status 过滤、排序。
      */
     @GetMapping
-    public Result<List<KnowledgeDocument>> listDocuments(
+    public Result<PageResult<KnowledgeDocument>> listDocuments(
             @RequestParam(required = false) String category,
-            @RequestParam(required = false, defaultValue = "active") String status) {
-        List<KnowledgeDocument> list = documentMapper.findByFilters(category, status);
-        return Result.success(list);
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false, defaultValue = "update_time") String sortBy,
+            @RequestParam(required = false, defaultValue = "desc") String sortOrder,
+            @RequestParam(required = false, defaultValue = "1") int page,
+            @RequestParam(required = false, defaultValue = "10") int size) {
+
+        // Whitelist sort column to prevent SQL injection
+        if (!ALLOWED_SORT_COLUMNS.contains(sortBy)) {
+            sortBy = "updateTime";
+        }
+        // Map camelCase to snake_case for SQL
+        sortBy = SORT_COLUMN_MAPPING.getOrDefault(sortBy, "update_time");
+        if (!"asc".equalsIgnoreCase(sortOrder) && !"desc".equalsIgnoreCase(sortOrder)) {
+            sortOrder = "desc";
+        }
+        sortOrder = sortOrder.toUpperCase();
+
+        int offset = Math.max(0, (page - 1) * size);
+        int limit = Math.max(1, Math.min(size, 100));
+
+        List<KnowledgeDocument> list = documentMapper.findByFilters(
+                category, status, keyword, sortBy, sortOrder, offset, limit);
+        long total = documentMapper.countByFilters(category, status, keyword);
+
+        return Result.success(new PageResult<>(list, total));
     }
 
     /**

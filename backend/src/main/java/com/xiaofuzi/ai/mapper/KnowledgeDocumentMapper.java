@@ -19,7 +19,16 @@ public interface KnowledgeDocumentMapper {
     List<KnowledgeDocument> findByCategory(@Param("category") String category);
 
     List<KnowledgeDocument> findByFilters(@Param("category") String category,
-                                          @Param("status") String status);
+                                          @Param("status") String status,
+                                          @Param("keyword") String keyword,
+                                          @Param("sortBy") String sortBy,
+                                          @Param("sortOrder") String sortOrder,
+                                          @Param("offset") int offset,
+                                          @Param("limit") int limit);
+
+    long countByFilters(@Param("category") String category,
+                        @Param("status") String status,
+                        @Param("keyword") String keyword);
 
     void update(KnowledgeDocument doc);
 
