@@ -26,4 +26,6 @@ public class ChatHistory {
     private String headingPath;
 
     private LocalDateTime createTime;
+
+    private Integer rating;
 }

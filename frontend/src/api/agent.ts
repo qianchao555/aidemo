@@ -54,6 +54,10 @@ export const listSessions = () =>
 export const getSessionHistory = (threadId: string) =>
   get<ChatHistoryDto[]>('/agent/sessions/' + threadId + '/history')
 
+/** 提交消息反馈 */
+export const submitFeedback = (messageId: number, rating: number) =>
+  post<void>(`/agent/sessions/${messageId}/feedback`, { rating })
+
 /** 删除会话 */
 export const deleteSessionApi = (threadId: string) =>
   del('/agent/sessions/' + threadId)

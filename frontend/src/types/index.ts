@@ -53,6 +53,7 @@ export interface ChatMessage {
   content: string
   timestamp: number
   sources?: MessageSource[]
+  rating?: number
 }
 
 /** 聊天会话 */
@@ -130,6 +131,7 @@ export interface ChatHistoryDto {
   sourceDoc?: string
   headingPath?: string
   createTime: string
+  rating?: number
 }
 
 /** 知识库统计 */

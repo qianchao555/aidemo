@@ -124,6 +124,18 @@ public class AgentController {
         return emitter;
     }
 
+    @PostMapping("/sessions/{messageId}/feedback")
+    public Result<Void> submitFeedback(@PathVariable Long messageId, @RequestBody Map<String, Integer> body) {
+        Integer rating = body.get("rating");
+        if (rating == null || (rating != 1 && rating != -1 && rating != 0)) {
+            return Result.error("rating 必须为 1（赞）、-1（踩）或 0（取消）");
+        }
+        Integer dbRating = rating == 0 ? null : rating;
+        chatHistoryMapper.updateRating(messageId, dbRating);
+        logger.info("反馈提交: messageId={}, rating={}", messageId, rating);
+        return Result.success();
+    }
+
     @PostMapping("/sessions")
     public Result<SessionSummary> createSession(@RequestBody Map<String, Object> body) {
         String threadId = (String) body.getOrDefault("threadId", UUID.randomUUID().toString());
