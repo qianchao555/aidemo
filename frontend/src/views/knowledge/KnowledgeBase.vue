@@ -34,6 +34,10 @@
           <el-option label="活跃" value="active" />
           <el-option label="已删除" value="deleted" />
         </el-select>
+        <el-select v-model="filterDepartment" placeholder="全部部门" clearable size="small"
+          style="width: 110px; margin-left: 8px" @change="fetchPage(1)">
+          <el-option v-for="dept in DEPARTMENTS" :key="dept" :label="dept" :value="dept" />
+        </el-select>
       </div>
       <div class="kb-toolbar-right">
         <span class="kb-summary">共 {{ store.documentTotal }} 条记录</span>
@@ -59,6 +63,14 @@
         <el-table-column prop="category" label="分类" sortable="custom">
           <template #default="{ row }">
             <el-tag v-if="row.category" size="small" type="primary">{{ row.category }}</el-tag>
+            <span v-else class="text-muted">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="department" label="部门" width="100" sortable="custom">
+          <template #default="{ row }">
+            <el-tag v-if="row.department" size="small" :type="departmentTagType(row.department)" effect="plain">
+              {{ row.department }}
+            </el-tag>
             <span v-else class="text-muted">-</span>
           </template>
         </el-table-column>
@@ -117,6 +129,12 @@
               <el-option label="Markdown" value="markdown" />
             </el-select>
           </div>
+        </div>
+        <div class="upload-form-field" style="margin-bottom: 14px">
+          <label class="upload-form-label">部门 <span style="color:#E87040">*</span></label>
+          <el-select v-model="uploadDepartment" placeholder="请选择部门" style="width: 100%">
+            <el-option v-for="dept in DEPARTMENTS" :key="dept" :label="dept" :value="dept" />
+          </el-select>
         </div>
         <div class="upload-form-field" style="margin-bottom: 14px">
           <label class="upload-form-label">描述（可选）</label>
@@ -219,6 +237,7 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { UploadFilled, Search } from '@element-plus/icons-vue'
 import { useKnowledgeStore } from '@/stores/knowledge-base'
+import { DEPARTMENTS } from '@/constants/departments'
 import type { KnowledgeDocument } from '@/types'
 
 const store = useKnowledgeStore()
@@ -230,12 +249,31 @@ const uploadFile = ref<File | null>(null)
 const uploadParserCategory = ref('')
 const uploadCategory = ref('')
 const uploadDescription = ref('')
+const filterDepartment = ref('')
+const uploadDepartment = ref(readUserDepartment())
+
+const DEPT_TAG_TYPES = ['', 'success', 'warning', 'danger', 'info'] as const
+
+function departmentTagType(dept: string): string {
+  let hash = 0
+  for (let i = 0; i < dept.length; i++) hash = ((hash << 5) - hash + dept.charCodeAt(i)) | 0
+  return DEPT_TAG_TYPES[Math.abs(hash) % DEPT_TAG_TYPES.length]
+}
+
+function readUserDepartment(): string {
+  try {
+    const raw = localStorage.getItem('currentUser')
+    const user = raw ? JSON.parse(raw) : null
+    return user?.department || '全公司'
+  } catch { return '全公司' }
+}
 
 function openUploadDialog() {
   uploadFile.value = null
   uploadParserCategory.value = ''
   uploadCategory.value = ''
   uploadDescription.value = ''
+  uploadDepartment.value = readUserDepartment()
   uploadDialogVisible.value = true
 }
 
@@ -249,7 +287,8 @@ async function handleUpload() {
     uploadFile.value,
     uploadParserCategory.value || undefined,
     uploadCategory.value || undefined,
-    uploadDescription.value || undefined
+    uploadDescription.value || undefined,
+    uploadDepartment.value || undefined
   )
   ElMessage.success('文件上传摄入成功')
   uploadDialogVisible.value = false
@@ -288,6 +327,7 @@ function fetchPage(page: number) {
     category: filterCategory.value || undefined,
     status: filterStatus.value || undefined,
     keyword: searchKeyword.value || undefined,
+    department: filterDepartment.value || undefined,
     sortBy: sortBy.value,
     sortOrder: sortOrder.value,
     page,
