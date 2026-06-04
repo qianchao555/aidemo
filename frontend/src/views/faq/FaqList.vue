@@ -7,90 +7,64 @@
 
     <div class="faq-toolbar">
       <div class="faq-toolbar-left">
-        <el-input
-          v-model="searchKeyword"
-          placeholder="搜索问题或关键词..."
-          clearable size="small" style="width: 200px"
-          @change="onSearch" @clear="onSearch"
-        />
+        <el-input v-model="searchKeyword" placeholder="搜索问题或关键词..." clearable size="small"
+          style="width: 220px" @change="onSearch" @clear="onSearch" />
         <el-select v-model="filterCategory" placeholder="全部分类" clearable size="small"
-          style="width: 120px; margin-left: 8px" @change="fetchPage(1)">
+          style="width: 130px" @change="fetchPage(1)">
           <el-option v-for="cat in store.categories" :key="cat" :label="cat" :value="cat" />
         </el-select>
         <el-select v-model="filterStatus" placeholder="全部状态" clearable size="small"
-          style="width: 110px; margin-left: 8px" @change="fetchPage(1)">
+          style="width: 110px" @change="fetchPage(1)">
           <el-option label="活跃" value="active" />
           <el-option label="停用" value="inactive" />
           <el-option label="已删除" value="deleted" />
         </el-select>
       </div>
       <div class="faq-toolbar-right">
-        <el-button size="small" :disabled="selectedIds.length === 0" @click="handleBatchDelete">批量删除</el-button>
-        <el-button size="small" :disabled="selectedIds.length === 0" @click="batchCategoryVisible = true">批量改分类</el-button>
-        <el-button size="small" :disabled="selectedIds.length === 0" @click="batchStatusVisible = true">批量改状态</el-button>
-        <el-button size="small" @click="handleExport">导出</el-button>
-        <el-button size="small" @click="importVisible = true">导入</el-button>
-        <el-button type="primary" size="small" @click="openDialog()">+ 新建 FAQ</el-button>
+        <el-button size="small" @click="handleExport" :icon="Download">导出</el-button>
+        <el-button size="small" @click="importVisible = true" :icon="Upload">导入</el-button>
+        <el-button type="primary" size="small" @click="openDialog()" :icon="Plus">新建 FAQ</el-button>
       </div>
     </div>
 
-    <el-card shadow="never" class="candidate-card">
-      <template #header>
-        <div class="candidate-header">
-          <span>
-            <strong>FAQ 候选</strong>
-            <span class="candidate-subtitle">从聊天记录中挖掘的高频提问</span>
-          </span>
-          <span class="candidate-controls">
-            <span class="candidate-label">最低频次</span>
-            <el-input-number v-model="minFrequency" :min="2" :max="100" size="small" style="width: 90px" />
-            <el-button size="small" type="primary" :loading="store.candidatesLoading" @click="loadCandidates">挖掘候选</el-button>
-          </span>
-        </div>
-      </template>
-      <el-table v-if="store.candidates.length > 0" :data="store.candidates" size="small" stripe style="width: 100%">
-        <el-table-column type="index" label="#" width="50" />
-        <el-table-column prop="question" label="用户提问" show-overflow-tooltip />
-        <el-table-column prop="frequency" label="出现次数" width="100" align="center">
-          <template #default="{ row }">
-            <el-tag type="warning" size="small">{{ row.frequency }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="120" align="center">
-          <template #default="{ row }">
-            <el-button class="detail-link" link size="small" @click="createFromCandidate(row.question)">创建 FAQ</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <el-empty v-else-if="!store.candidatesLoading" description="暂无候选，点击「挖掘候选」从聊天记录中发现高频问题" :image-size="60" />
-    </el-card>
+    <!-- 批量操作栏 -->
+    <transition name="batch-bar">
+      <div v-if="selectedIds.length > 0" class="batch-bar">
+        <span class="batch-info">已选 <strong>{{ selectedIds.length }}</strong> 项</span>
+        <el-button size="small" @click="handleBatchDelete">批量删除</el-button>
+        <el-button size="small" @click="batchCategoryVisible = true">改分类</el-button>
+        <el-button size="small" @click="batchStatusVisible = true">改状态</el-button>
+        <el-button link size="small" class="batch-clear" @click="tableRef?.clearSelection()">取消选择</el-button>
+      </div>
+    </transition>
 
+    <!-- 表格区域 -->
     <div class="faq-table-section">
       <el-table ref="tableRef" :data="store.faqList" v-loading="store.loading" stripe style="width: 100%"
-        @sort-change="onSortChange" @selection-change="onSelectionChange">
-        <el-table-column type="selection" width="40" />
-        <el-table-column prop="question" label="问题" show-overflow-tooltip sortable="custom" />
-        <el-table-column prop="answer" label="答案" show-overflow-tooltip sortable="custom" />
-        <el-table-column prop="category" label="分类" sortable="custom">
+        @sort-change="onSortChange" @selection-change="onSelectionChange"
+        :default-sort="{ prop: 'hitCount', order: 'descending' }">
+        <el-table-column type="selection" width="44" />
+        <el-table-column prop="question" label="问题" min-width="180" show-overflow-tooltip sortable="custom" />
+        <el-table-column prop="answer" label="答案" min-width="200" show-overflow-tooltip />
+        <el-table-column prop="category" label="分类" width="100" sortable="custom">
           <template #default="{ row }">
-            <el-tag v-if="row.category" size="small" type="primary">{{ row.category }}</el-tag>
+            <el-tag v-if="row.category" size="small" :type="categoryTagType(row.category)" effect="plain">{{ row.category }}</el-tag>
             <span v-else class="text-muted">-</span>
           </template>
         </el-table-column>
-        <el-table-column prop="keywords" label="关键词" show-overflow-tooltip />
-        <el-table-column prop="hitCount" label="命中" sortable="custom" />
-        <el-table-column prop="lastHitTime" label="最近命中" sortable="custom">
+        <el-table-column prop="hitCount" label="命中" width="80" align="center" sortable="custom" />
+        <el-table-column prop="lastHitTime" label="最近命中" width="160" sortable="custom">
           <template #default="{ row }">
-            <span>{{ row.lastHitTime || '-' }}</span>
+            <span class="text-muted" style="font-size: 13px">{{ formatTime(row.lastHitTime) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" sortable="custom">
+        <el-table-column prop="status" label="状态" width="80" align="center" sortable="custom">
           <template #default="{ row }">
-            <el-tag :type="row.status === 'active' ? 'success' : 'info'" size="small">{{ row.status || '-' }}</el-tag>
+            <span class="status-dot" :class="row.status === 'active' ? 'on' : 'off'" />
+            {{ row.status === 'active' ? '启用' : '停用' }}
           </template>
         </el-table-column>
-        <el-table-column prop="createTime" label="创建时间" sortable="custom" />
-        <el-table-column label="操作" fixed="right">
+        <el-table-column label="操作" width="120" align="center" fixed="right">
           <template #default="{ row }">
             <el-button class="detail-link" link size="small" @click="openDialog(row)">编辑</el-button>
             <el-popconfirm title="确定删除此 FAQ？" @confirm="handleDelete(row.id!)">
@@ -104,20 +78,63 @@
 
       <el-empty v-if="!store.loading && store.faqList.length === 0" description="暂无 FAQ" :image-size="60" />
 
+      <!-- 候选挖掘 -->
+      <div class="discover">
+        <div class="discover-toggle" @click="candidateExpanded = !candidateExpanded">
+          <div class="discover-toggle-left">
+            <span class="discover-dot">&#9679;</span>
+            <template v-if="store.candidates.length > 0">
+              发现 <strong>{{ store.candidates.length }}</strong> 个潜在 FAQ，可一键创建
+            </template>
+            <template v-else>
+              候选挖掘 — 从聊天记录中分析高频未命中提问
+            </template>
+          </div>
+          <span class="discover-arrow" :class="{ open: candidateExpanded }">&#9660;</span>
+        </div>
+
+        <div v-if="candidateExpanded" class="discover-body">
+          <p class="discover-desc">
+            系统自动统计聊天记录中命中 FAQ 失败的高频问题，帮助你发现知识盲区。
+          </p>
+          <div class="discover-controls">
+            <span class="discover-label">最低频次</span>
+            <el-input-number v-model="minFrequency" :min="2" :max="100" size="small"
+              controls-position="right" style="width: 100px" />
+            <el-button size="small" type="primary" :loading="store.candidatesLoading" @click="loadCandidates">
+              开始挖掘
+            </el-button>
+          </div>
+
+          <div v-if="store.candidates.length > 0" class="discover-list">
+            <div class="discover-list-header">
+              <span class="dlh-q">用户提问</span>
+              <span class="dlh-freq">频次</span>
+              <span class="dlh-act">操作</span>
+            </div>
+            <div v-for="(item, idx) in store.candidates" :key="idx" class="discover-item">
+              <span class="discover-rank">{{ idx + 1 }}</span>
+              <span class="discover-question" :title="item.question">{{ item.question }}</span>
+              <span class="discover-freq">{{ item.frequency }} 次</span>
+              <el-button link size="small" class="detail-link" @click.stop="createFromCandidate(item.question)">
+                创建 FAQ
+              </el-button>
+            </div>
+          </div>
+          <el-empty v-else-if="!store.candidatesLoading" description="暂无候选，调整最低频次后重试" :image-size="50" />
+        </div>
+      </div>
+
+      <!-- 分页 -->
       <div class="faq-pagination">
         <el-pagination
-          v-model:current-page="currentPage"
-          :page-size="pageSize"
-          :page-sizes="[5, 10, 20, 50]"
-          :total="store.faqTotal"
-          layout="total, sizes, prev, pager, next"
-          size="small"
-          @current-change="fetchPage"
-          @size-change="onSizeChange"
-        />
+          v-model:current-page="currentPage" :page-size="pageSize" :page-sizes="[5, 10, 20, 50]"
+          :total="store.faqTotal" layout="total, sizes, prev, pager, next" size="small"
+          @current-change="fetchPage" @size-change="onSizeChange" />
       </div>
     </div>
 
+    <!-- 弹窗（不变） -->
     <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑 FAQ' : '新建 FAQ'" width="720px" :close-on-click-modal="false">
       <el-form ref="formRef" :model="formData" :rules="rules" label-width="80px">
         <el-form-item label="问题" prop="question">
@@ -218,14 +235,25 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { UploadFilled } from '@element-plus/icons-vue'
+import { Upload, Download, Plus, UploadFilled } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useFaqStore } from '@/stores/faq'
-import { similarFaq, exportFaqUrl, getFaq } from '@/api/faq'
+import { similarFaq, downloadExportFaq, getFaq } from '@/api/faq'
 import type { FaqEntry, SimilarFaqItem } from '@/types'
-import VMdEditor from '@kangc/v-md-editor'
-import '@kangc/v-md-editor/lib/style/base-editor.css'
-import '@kangc/v-md-editor/lib/theme/style/github.css'
+
+const TAG_TYPES = ['', 'success', 'warning', 'danger', 'info'] as const
+
+function categoryTagType(cat: string): string {
+  let hash = 0
+  for (let i = 0; i < cat.length; i++) hash = ((hash << 5) - hash + cat.charCodeAt(i)) | 0
+  return TAG_TYPES[Math.abs(hash) % TAG_TYPES.length]
+}
+
+function formatTime(raw: string | undefined | null): string {
+  if (!raw) return '-'
+  const s = raw.replace('T', ' ').replace(/\.\d+$/, '')
+  return s.length >= 19 ? s.substring(0, 19) : s
+}
 
 const router = useRouter()
 const store = useFaqStore()
@@ -302,12 +330,10 @@ function onQuestionInput(val: string) {
 function openDialog(row?: FaqEntry) {
   similarFaqs.value = []
   if (row) {
-    isEdit.value = true
-    editId.value = row.id!
+    isEdit.value = true; editId.value = row.id!
     formData.value = { ...row }
   } else {
-    isEdit.value = false
-    editId.value = null
+    isEdit.value = false; editId.value = null
     formData.value = { question: '', answer: '', keywords: '', category: '', status: 'active' }
   }
   dialogVisible.value = true
@@ -340,6 +366,7 @@ async function handleDelete(id: number) {
   fetchPage(currentPage.value)
 }
 
+const candidateExpanded = ref(false)
 const minFrequency = ref(3)
 function loadCandidates() { store.fetchCandidates(20, minFrequency.value) }
 function createFromCandidate(question: string) {
@@ -359,6 +386,7 @@ async function handleBatchDelete() {
     await ElMessageBox.confirm(`确定删除选中的 ${selectedIds.value.length} 条 FAQ？`, '批量删除', { type: 'warning' })
     await store.batchDelete(selectedIds.value)
     ElMessage.success('批量删除完成')
+    tableRef.value?.clearSelection()
     fetchPage(currentPage.value)
   } catch { /* cancelled */ }
 }
@@ -367,8 +395,8 @@ async function doBatchUpdateCategory() {
   if (!batchCategoryValue.value) return
   await store.batchUpdateCategory(selectedIds.value, batchCategoryValue.value)
   ElMessage.success('批量更新分类完成')
-  batchCategoryVisible.value = false
-  batchCategoryValue.value = ''
+  batchCategoryVisible.value = false; batchCategoryValue.value = ''
+  tableRef.value?.clearSelection()
   fetchPage(currentPage.value)
 }
 
@@ -376,8 +404,8 @@ async function doBatchUpdateStatus() {
   if (!batchStatusValue.value) return
   await store.batchUpdateStatus(selectedIds.value, batchStatusValue.value)
   ElMessage.success('批量更新状态完成')
-  batchStatusVisible.value = false
-  batchStatusValue.value = ''
+  batchStatusVisible.value = false; batchStatusValue.value = ''
+  tableRef.value?.clearSelection()
   fetchPage(currentPage.value)
 }
 
@@ -422,10 +450,12 @@ function handleExport() {
   }
 }
 
-function doExport() {
+async function doExport() {
   const cat = exportScope.value === 'category' ? exportCategory.value : undefined
-  const url = exportFaqUrl(cat, exportFormat.value)
-  window.open(url, '_blank')
+  try {
+    await downloadExportFaq(cat, exportFormat.value)
+    ElMessage.success('导出完成')
+  } catch { ElMessage.error('导出失败') }
   exportVisible.value = false
 }
 
@@ -442,15 +472,17 @@ onMounted(() => {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
   overflow: hidden;
+  --el-color-primary: var(--primary);
+  --el-color-primary-light-3: #F08A60;
 }
 
+/* Tabs */
 .faq-tabs {
   display: flex; gap: 0;
   padding: 0 24px;
   border-bottom: 2px solid var(--border-base);
   background: var(--surface-warm);
 }
-
 .faq-tab {
   padding: 12px 24px;
   font-size: 14px; font-weight: 600;
@@ -461,30 +493,135 @@ onMounted(() => {
   transition: all 0.15s;
   user-select: none;
 }
-
 .faq-tab:hover { color: var(--text-secondary); }
 .faq-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
 
+/* Toolbar */
 .faq-toolbar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 24px;
+  padding: 12px 24px;
   border-bottom: 1px solid var(--border-light);
 }
-
-.faq-toolbar-left { display: flex; align-items: center; }
+.faq-toolbar-left { display: flex; align-items: center; gap: 8px; }
 .faq-toolbar-right { display: flex; align-items: center; gap: 6px; }
 
-.candidate-card { margin: 16px 24px; }
-.candidate-header { display: flex; justify-content: space-between; align-items: center; }
-.candidate-subtitle { color: #909399; font-size: 13px; margin-left: 8px; }
-.candidate-controls { display: flex; align-items: center; gap: 8px; }
-.candidate-label { font-size: 13px; color: #606266; }
+/* Batch bar */
+.batch-bar {
+  display: flex; align-items: center; gap: 14px;
+  margin: 0 24px;
+  padding: 8px 14px;
+  background: rgba(232, 112, 64, 0.06);
+  border: 1px solid rgba(232, 112, 64, 0.2);
+  border-radius: var(--radius-md);
+}
+.batch-info { font-size: 13px; color: var(--text-secondary); }
+.batch-info strong { color: var(--primary); }
+.batch-clear { margin-left: auto; color: var(--text-muted) !important; }
+.batch-bar-enter-active, .batch-bar-leave-active { transition: all 0.2s ease; }
+.batch-bar-enter-from, .batch-bar-leave-to { opacity: 0; transform: translateY(-6px); }
 
-.faq-table-section { padding: 0 24px 16px; }
+/* Table section */
+.faq-table-section { padding: 14px 24px 16px; }
 .faq-pagination { display: flex; justify-content: flex-end; padding: 12px 0 4px; }
 
 .text-muted { color: var(--text-muted); }
 
+.status-dot {
+  display: inline-block; width: 6px; height: 6px;
+  border-radius: 50%; margin-right: 4px; vertical-align: middle;
+}
+.status-dot.on { background: #67c23a; }
+.status-dot.off { background: #c0c4cc; }
+
+/* ===== 候选挖掘 ===== */
+.discover {
+  margin-top: 14px;
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.discover-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px; color: var(--text-secondary);
+  transition: background 0.15s;
+}
+.discover-toggle:hover { background: var(--surface-warm); }
+
+.discover-toggle-left { display: flex; align-items: center; gap: 8px; }
+.discover-toggle-left strong { color: var(--primary); }
+
+.discover-dot {
+  color: var(--primary); font-size: 8px;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.discover-arrow {
+  font-size: 10px; color: var(--text-muted);
+  transition: transform 0.2s;
+}
+.discover-arrow.open { transform: rotate(180deg); }
+
+.discover-body {
+  padding: 0 16px 14px;
+  border-top: 1px solid var(--border-light);
+}
+
+.discover-desc {
+  margin: 10px 0 0;
+  font-size: 12px; color: var(--text-muted); line-height: 1.6;
+}
+
+.discover-controls {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 10px;
+}
+.discover-label { font-size: 12px; color: var(--text-muted); }
+
+.discover-list { margin-top: 12px; }
+
+.discover-list-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 0 6px 28px;
+  font-size: 11px; color: var(--text-muted);
+  border-bottom: 1px solid var(--border-light);
+}
+.dlh-q { flex: 1; }
+.dlh-freq { width: 60px; text-align: center; }
+.dlh-act { width: 80px; text-align: center; }
+
+.discover-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border-light);
+  transition: background 0.1s;
+}
+.discover-item:last-child { border-bottom: none; }
+.discover-item:hover { background: var(--surface-warm); margin: 0 -16px; padding: 7px 16px; }
+
+.discover-rank {
+  width: 20px; text-align: center;
+  font-size: 11px; font-weight: 600; color: var(--text-muted);
+}
+
+.discover-question {
+  flex: 1; font-size: 13px; color: var(--text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.discover-freq {
+  width: 60px; text-align: center;
+  font-size: 13px; font-weight: 600; color: var(--primary);
+}
+
+/* Dialog */
 .similar-alert { margin-bottom: 16px; }
 .similar-item {
   display: flex; align-items: center; gap: 8px;

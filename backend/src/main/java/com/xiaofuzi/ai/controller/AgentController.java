@@ -1,6 +1,7 @@
 package com.xiaofuzi.ai.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xiaofuzi.ai.context.DepartmentContextHolder;
 import com.xiaofuzi.ai.context.UserContext;
 import com.xiaofuzi.ai.dto.ContentChatRequest;
 import com.xiaofuzi.ai.dto.SessionSummary;
@@ -54,8 +55,13 @@ public class AgentController {
         String message = contentChatRequest.getUserMessage();
         String threadId = contentChatRequest.getThreadId();
         Long userId = UserContext.get().getId();
-        String response = ragQaAgentService.ask(threadId, userId, message);
-        return Result.success(response);
+        DepartmentContextHolder.set(contentChatRequest.getDepartment());
+        try {
+            String response = ragQaAgentService.ask(threadId, userId, message);
+            return Result.success(response);
+        } finally {
+            DepartmentContextHolder.clear();
+        }
     }
 
     @PostMapping(value = "/rag-qa/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -71,6 +77,7 @@ public class AgentController {
         final Long finalUserId = UserContext.get().getId();
 
         sseExecutor.execute(() -> {
+            DepartmentContextHolder.set(request.getDepartment());
             try {
                 // 使用 ObjectMapper 显式序列化为 JSON，避免 SseEmitter 内部 toString() 问题
                 String thinkingJson = objectMapper.writeValueAsString(
@@ -109,6 +116,8 @@ public class AgentController {
                     emitter.send(SseEmitter.event().name("error").data(errorJson));
                 } catch (Exception ignored) {}
                 emitter.completeWithError(e);
+            } finally {
+                DepartmentContextHolder.clear();
             }
         });
 

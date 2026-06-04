@@ -1,4 +1,5 @@
 import { get, post, put, del } from './request'
+import axios from 'axios'
 import type { FaqEntry, FaqCandidate, FaqListParams, FaqStats, FaqTrendItem, FaqCategoryDistItem, SimilarFaqItem } from '@/types'
 
 export interface PageResult<T> {
@@ -45,11 +46,21 @@ export const importFaq = (file: File) => {
   return post<{ success: boolean; message: string; count: number }>('/faq/faq/import', fd)
 }
 
-export const exportFaqUrl = (category?: string, format: string = 'csv') => {
+export const downloadExportFaq = async (category?: string, format: string = 'csv') => {
   const params = new URLSearchParams()
   if (category) params.set('category', category)
   params.set('format', format)
-  return `/api/faq/faq/export?${params.toString()}`
+  const token = localStorage.getItem('authToken')
+  const res = await axios.get(`/faq/faq/export?${params.toString()}`, {
+    responseType: 'blob',
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
+  })
+  const url = URL.createObjectURL(res.data)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = format === 'xlsx' ? 'faq_export.xlsx' : 'faq_export.csv'
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 export const getFaqStats = () =>

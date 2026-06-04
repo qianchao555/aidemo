@@ -4,6 +4,7 @@ import type { SessionSummary, ChatHistoryDto, ChatUser, LoginRequest, LoginRespo
 export interface ChatParams {
   userMessage: string
   threadId?: string
+  department?: string
 }
 
 function getToken(): string {

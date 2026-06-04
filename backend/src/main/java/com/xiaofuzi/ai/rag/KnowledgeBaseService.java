@@ -360,12 +360,15 @@ public class KnowledgeBaseService {
     public Map<String, Object> hybridSearch(String query, int topK, double similarityThreshold, String department) {
         // 1. 向量语义检索（用双倍 topK 扩大候选池，提高 RRF 融合质量）
         //    排除 FAQ 条目：FAQ 走前置精确匹配，不应混入文档检索结果
-        List<Document> vectorResults = vectorStore.similaritySearch(
-                SearchRequest.builder()
-                        .query(query)
-                        .topK(topK * 2)
-                        .similarityThreshold(similarityThreshold)
-                        .build());
+        //    部门过滤：指定部门时在向量检索阶段按 metadata.department 过滤
+        SearchRequest.Builder vectorReq = SearchRequest.builder()
+                .query(query)
+                .topK(topK * 2)
+                .similarityThreshold(similarityThreshold);
+        if (department != null && !department.isBlank()) {
+            vectorReq.filterExpression("department == '" + department.replace("'", "''") + "'");
+        }
+        List<Document> vectorResults = vectorStore.similaritySearch(vectorReq.build());
         vectorResults = filterNonFaq(vectorResults);
 
         // 2. 关键词模糊检索（pg_trgm 三元组，中文适用：按字符三元组切分后匹配）

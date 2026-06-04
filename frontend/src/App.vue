@@ -7,16 +7,31 @@
     <div class="app-body">
       <!-- Icon Sidebar -->
       <nav class="icon-sidebar" :class="{ expanded: sidebarExpanded }">
-        <div class="sidebar-top">
-          <div v-if="sidebarExpanded" class="sidebar-logo" @click="navTo('/agent/chat')" title="首页">
+        <div class="sidebar-top" ref="deptMenuRef">
+          <div class="sidebar-logo" @click="sidebarExpanded ? deptMenuVisible = !deptMenuVisible : sidebarExpanded = true">
             <div class="sidebar-logo-icon">Bot</div>
-            <span class="sidebar-logo-text">知识库助手</span>
+            <div v-if="sidebarExpanded" class="sidebar-logo-text">
+              <span class="sidebar-logo-title">知识库助手</span>
+              <span class="sidebar-logo-sub">
+                <span class="sidebar-logo-sub-icon">🏢</span>
+                <span class="sidebar-logo-sub-name">{{ currentDepartment }}</span>
+                <span class="sidebar-logo-sub-arrow" :class="{ open: deptMenuVisible }">▼</span>
+              </span>
+            </div>
           </div>
-          <div class="sidebar-toggle" @click="sidebarExpanded = !sidebarExpanded" :title="sidebarExpanded ? '收起' : '展开'">
+          <div class="sidebar-toggle" @click.stop="sidebarExpanded = !sidebarExpanded" :title="sidebarExpanded ? '收起' : '展开'">
             <el-icon :size="18">
               <Fold v-if="sidebarExpanded" />
               <Expand v-else />
             </el-icon>
+          </div>
+
+          <div v-if="deptMenuVisible" class="dept-menu">
+            <div v-for="dept in DEPARTMENTS" :key="dept"
+              class="dept-item" :class="{ active: currentDepartment === dept }"
+              @click.stop="switchDepartment(dept); deptMenuVisible = false">
+              {{ dept }}
+            </div>
           </div>
         </div>
 
@@ -52,23 +67,6 @@
               <span v-if="sidebarExpanded" class="nav-label">知识库管理</span>
             </div>
           </template>
-        </div>
-
-        <!-- Department Switcher -->
-        <div class="sidebar-dept" ref="deptMenuRef">
-          <div v-if="sidebarExpanded" class="dept-label">当前部门</div>
-          <div class="dept-toggle" :class="{ expanded: sidebarExpanded }" @click="deptMenuVisible = !deptMenuVisible">
-            <span class="dept-icon">🏢</span>
-            <span v-if="sidebarExpanded" class="dept-name">{{ currentDepartment }}</span>
-            <span v-if="sidebarExpanded" class="dept-arrow" :class="{ open: deptMenuVisible }">▼</span>
-          </div>
-          <div v-if="deptMenuVisible" class="dept-menu">
-            <div v-for="dept in DEPARTMENTS" :key="dept"
-              class="dept-item" :class="{ active: currentDepartment === dept }"
-              @click="switchDepartment(dept); deptMenuVisible = false">
-              {{ dept }}
-            </div>
-          </div>
         </div>
 
         <div class="sidebar-footer">
@@ -119,6 +117,7 @@ interface UserInfo {
   username?: string
   displayName?: string
   role?: string
+  department?: string
 }
 
 const route = useRoute()
@@ -250,11 +249,12 @@ async function handleLogout() {
 /* Sidebar top: logo + toggle */
 .sidebar-top {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   padding: 0 4px;
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
 }
 
 .icon-sidebar:not(.expanded) .sidebar-top {
@@ -266,6 +266,13 @@ async function handleLogout() {
   display: flex;
   align-items: center;
   gap: 10px;
+  border-radius: var(--radius-md);
+  padding: 2px 6px;
+  margin: -2px -6px;
+  transition: background 0.15s;
+}
+.sidebar-logo:hover {
+  background: rgba(255,255,255,0.04);
 }
 
 .sidebar-logo-icon {
@@ -283,10 +290,46 @@ async function handleLogout() {
 }
 
 .sidebar-logo-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+}
+
+.sidebar-logo-title {
   font-size: 14px;
   font-weight: 700;
   color: white;
   white-space: nowrap;
+}
+
+.sidebar-logo-sub {
+  font-size: 11px;
+  color: #999;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.sidebar-logo-sub-icon {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.sidebar-logo-sub-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sidebar-logo-sub-arrow {
+  font-size: 7px;
+  color: rgba(255,255,255,0.25);
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+.sidebar-logo:hover .sidebar-logo-sub-arrow {
+  color: rgba(255,255,255,0.45);
+}
+.sidebar-logo-sub-arrow.open {
+  color: rgba(255,255,255,0.45);
 }
 
 .sidebar-toggle {
@@ -358,75 +401,29 @@ async function handleLogout() {
   white-space: nowrap;
 }
 
-/* Department Switcher */
-.sidebar-dept {
-  padding: 0 12px 4px;
-  position: relative;
-}
-.icon-sidebar:not(.expanded) .sidebar-dept {
-  display: flex;
-  justify-content: center;
-  padding: 0 0 4px;
-}
-.dept-label {
-  font-size: 10px;
-  color: #555;
-  text-transform: uppercase;
-  padding: 0 8px 6px;
-  letter-spacing: 0.5px;
-}
-.dept-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-size: 13px;
-  color: #ccc;
-  transition: background 0.15s;
-}
-.dept-toggle:hover { background: rgba(255,255,255,0.08); }
-.dept-toggle:not(.expanded) {
-  justify-content: center;
-  padding: 8px;
-}
-.dept-icon { font-size: 14px; flex-shrink: 0; }
-.dept-name { flex: 1; }
-.dept-arrow {
-  font-size: 9px;
-  color: #666;
-  transition: transform 0.15s;
-}
-.dept-arrow.open { transform: rotate(180deg); }
+/* Department dropdown menu */
 .dept-menu {
   position: absolute;
   top: 100%;
-  left: 12px;
-  right: 12px;
-  background: #333;
-  border: 1px solid rgba(255,255,255,0.1);
+  left: 4px;
+  min-width: 180px;
+  background: var(--white);
   border-radius: var(--radius-md);
-  overflow: hidden;
-  z-index: 95;
-  margin-top: 2px;
-}
-.icon-sidebar:not(.expanded) .dept-menu {
-  left: 0;
-  right: auto;
-  width: 180px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  border: 1px solid var(--border-light);
+  z-index: 100;
+  padding: 4px 0;
 }
 .dept-item {
-  padding: 8px 12px;
-  font-size: 12px;
-  color: #999;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--text-secondary);
   cursor: pointer;
+  white-space: nowrap;
   transition: all 0.1s;
 }
-.dept-item:hover { color: #ccc; background: rgba(255,255,255,0.04); }
-.dept-item.active { color: var(--primary); background: rgba(232,112,64,0.12); }
+.dept-item:hover { color: var(--text-primary); background: var(--surface-warm); }
+.dept-item.active { color: var(--primary); background: rgba(232,112,64,0.06); font-weight: 600; }
 
 /* Footer / user area */
 .sidebar-footer {

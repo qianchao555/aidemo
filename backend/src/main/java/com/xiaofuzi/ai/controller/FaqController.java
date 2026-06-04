@@ -213,8 +213,10 @@ public class FaqController {
         } else {
             response.setContentType("text/csv; charset=UTF-8");
             response.setHeader("Content-Disposition", "attachment; filename=faq_export.csv");
-            response.getOutputStream().write(new byte[]{(byte) 0xEF, (byte) 0xBB, (byte) 0xBF});
-            java.io.PrintWriter writer = response.getWriter();
+            java.io.OutputStream os = response.getOutputStream();
+            os.write(new byte[]{(byte) 0xEF, (byte) 0xBB, (byte) 0xBF});
+            java.io.PrintWriter writer = new java.io.PrintWriter(
+                new java.io.OutputStreamWriter(os, java.nio.charset.StandardCharsets.UTF_8));
             writer.println("问题,答案,分类,关键词");
             for (FaqEntry f : list) {
                 writer.printf("\"%s\",\"%s\",\"%s\",\"%s\"\n",

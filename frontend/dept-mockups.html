@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>部门切换器 — 方案 D 细化</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #F5F3F0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: 40px;
+    display: flex;
+    gap: 32px;
+  }
+
+  .card {
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    overflow: hidden;
+    width: 340px;
+  }
+  .card-title {
+    padding: 16px 20px;
+    font-size: 15px;
+    font-weight: 700;
+    color: #1a1a1a;
+    border-bottom: 1px solid #F0ECE6;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .badge { font-size: 11px; background: #E87040; color: #fff; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+  .desc { font-size: 13px; color: #666; padding: 14px 20px; line-height: 1.6; }
+  hr { border: 0; border-top: 1px solid #F0ECE6; margin: 0 20px; }
+
+  .sidebar {
+    width: 220px;
+    background: #2D2D2D;
+    color: #ccc;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border-radius: 10px;
+    min-height: 400px;
+  }
+  .sb-icon {
+    width: 32px; height: 32px; background: #E87040; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 14px; flex-shrink: 0;
+  }
+  .sidebar-nav-item {
+    display: flex; align-items: center; gap: 10px; padding: 8px;
+    border-radius: 8px; color: #888; font-size: 13px; cursor: pointer;
+  }
+  .sidebar-nav-item:hover { background: rgba(255,255,255,0.04); }
+  .sidebar-nav-item.active { background: rgba(232,112,64,0.15); color: #E87040; }
+  .sidebar-spacer { flex: 1; }
+
+  .dept-menu {
+    background: #fff; border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    border: 1px solid #F0ECE6; padding: 4px 0;
+  }
+  .dept-menu-item {
+    padding: 8px 14px; font-size: 13px; color: #666;
+    cursor: pointer; white-space: nowrap;
+  }
+  .dept-menu-item:hover { background: #FAF9F7; color: #1a1a1a; }
+  .dept-menu-item.active { color: #E87040; background: rgba(232,112,64,0.05); font-weight: 600; }
+
+  /* ===== Shared hover-area pattern ===== */
+  .dept-header {
+    position: relative;
+    padding: 4px 8px 10px;
+    margin-bottom: 4px;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: background 0.15s;
+  }
+  .dept-header:hover { background: rgba(255,255,255,0.03); }
+  .dept-main { display: flex; align-items: center; gap: 8px; }
+
+  /* ===== D1: Faint arrow ===== */
+  .dept-d1-title-row { display: flex; align-items: center; gap: 4px; }
+  .dept-d1-name { font-weight: 700; color: #fff; font-size: 14px; }
+  .dept-d1-arrow {
+    font-size: 8px; color: rgba(255,255,255,0.18); transition: all 0.2s;
+    margin-top: 1px;
+  }
+  .dept-header:hover .dept-d1-arrow { color: rgba(255,255,255,0.35); }
+  .dept-d1-info {
+    display: flex; align-items: center; gap: 4px;
+    margin-top: 2px; font-size: 11px; color: #888;
+    opacity: 0; transition: opacity 0.2s;
+    pointer-events: none;
+  }
+  .dept-header:hover .dept-d1-info { opacity: 1; pointer-events: auto; }
+
+  /* ===== D2: Tiny dot indicator ===== */
+  .dept-d2-name { font-weight: 700; color: #fff; font-size: 14px; }
+  .dept-d2-dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: rgba(255,255,255,0.15); transition: all 0.2s;
+    margin-left: 2px; flex-shrink: 0;
+  }
+  .dept-header:hover .dept-d2-dot { background: rgba(232,112,64,0.6); }
+  .dept-d2-info {
+    display: flex; align-items: center; gap: 4px;
+    margin-top: 2px; font-size: 11px; color: #888;
+    opacity: 0; transition: opacity 0.2s;
+    pointer-events: none;
+  }
+  .dept-header:hover .dept-d2-info { opacity: 1; pointer-events: auto; }
+
+  /* ===== D3: Subtle underline accent ===== */
+  .dept-d3-name { font-weight: 700; color: #fff; font-size: 14px; }
+  .dept-d3-line {
+    height: 1px; width: 0; background: rgba(232,112,64,0.5);
+    transition: width 0.25s ease; margin-top: 1px;
+  }
+  .dept-header:hover .dept-d3-line { width: 100%; }
+  .dept-d3-info {
+    display: flex; align-items: center; gap: 4px;
+    margin-top: 3px; font-size: 11px; color: #888;
+    opacity: 0; transition: opacity 0.2s;
+    pointer-events: none;
+  }
+  .dept-header:hover .dept-d3-info { opacity: 1; pointer-events: auto; }
+
+  .dept-sub-arrow { font-size: 7px; opacity: 0.5; }
+</style>
+</head>
+<body>
+
+<!-- D1: Faint chevron -->
+<div class="card">
+  <div class="card-title">
+    D1 <span class="badge" style="margin-left:6px;">推荐</span>
+    &nbsp;微弱箭头
+  </div>
+  <div class="desc">Logo 右侧一个极其淡的 ▼（18% 透明度），几乎不可见。hover 时浮现部门行。安静不打扰。</div>
+  <hr>
+  <div class="sidebar" style="margin:12px; width:208px;">
+    <div class="dept-header">
+      <div class="dept-main">
+        <div class="sb-icon">B</div>
+        <div>
+          <div class="dept-d1-title-row">
+            <span class="dept-d1-name">知识库助手</span>
+            <span class="dept-d1-arrow">▼</span>
+          </div>
+          <div class="dept-d1-info">
+            🏢 人力资源 <span class="dept-sub-arrow">▼</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dept-menu" style="margin:0 0 8px 0;">
+      <div class="dept-menu-item">🏢 全公司</div>
+      <div class="dept-menu-item active">🏢 人力资源</div>
+      <div class="dept-menu-item">🏢 财务</div>
+      <div class="dept-menu-item">🏢 研发</div>
+      <div class="dept-menu-item">🏢 行政</div>
+    </div>
+
+    <div class="sidebar-nav-item active">💬 智能问答</div>
+    <div class="sidebar-nav-item">📋 FAQ 管理</div>
+    <div class="sidebar-nav-item">📄 知识库管理</div>
+    <div class="sidebar-spacer"></div>
+  </div>
+</div>
+
+<!-- D2: Dot indicator -->
+<div class="card">
+  <div class="card-title">D2 &nbsp;小圆点</div>
+  <div class="desc">标题旁一个极淡的小圆点（15% 透明度），hover 时变珊瑚色，示意这是可交互的。</div>
+  <hr>
+  <div class="sidebar" style="margin:12px; width:208px;">
+    <div class="dept-header">
+      <div class="dept-main">
+        <div class="sb-icon">B</div>
+        <div>
+          <div style="display:flex;align-items:center;gap:4px;">
+            <span class="dept-d2-name">知识库助手</span>
+            <span class="dept-d2-dot"></span>
+          </div>
+          <div class="dept-d2-info">
+            🏢 人力资源 <span class="dept-sub-arrow">▼</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dept-menu" style="margin:0 0 8px 0;">
+      <div class="dept-menu-item">🏢 全公司</div>
+      <div class="dept-menu-item active">🏢 人力资源</div>
+      <div class="dept-menu-item">🏢 财务</div>
+      <div class="dept-menu-item">🏢 研发</div>
+      <div class="dept-menu-item">🏢 行政</div>
+    </div>
+
+    <div class="sidebar-nav-item active">💬 智能问答</div>
+    <div class="sidebar-nav-item">📋 FAQ 管理</div>
+    <div class="sidebar-nav-item">📄 知识库管理</div>
+    <div class="sidebar-spacer"></div>
+  </div>
+</div>
+
+<!-- D3: Underline accent -->
+<div class="card">
+  <div class="card-title">D3 &nbsp;下划线</div>
+  <div class="desc">hover 时标题下方出现一条淡珊瑚色下划线，暗示"这里有更多"，极简但有反馈。</div>
+  <hr>
+  <div class="sidebar" style="margin:12px; width:208px;">
+    <div class="dept-header">
+      <div class="dept-main">
+        <div class="sb-icon">B</div>
+        <div>
+          <span class="dept-d3-name">知识库助手</span>
+          <div class="dept-d3-line"></div>
+          <div class="dept-d3-info">
+            🏢 人力资源 <span class="dept-sub-arrow">▼</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dept-menu" style="margin:0 0 8px 0;">
+      <div class="dept-menu-item">🏢 全公司</div>
+      <div class="dept-menu-item active">🏢 人力资源</div>
+      <div class="dept-menu-item">🏢 财务</div>
+      <div class="dept-menu-item">🏢 研发</div>
+      <div class="dept-menu-item">🏢 行政</div>
+    </div>
+
+    <div class="sidebar-nav-item active">💬 智能问答</div>
+    <div class="sidebar-nav-item">📋 FAQ 管理</div>
+    <div class="sidebar-nav-item">📄 知识库管理</div>
+    <div class="sidebar-spacer"></div>
+  </div>
+</div>
+
+</body>
+</html>

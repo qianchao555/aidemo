@@ -234,7 +234,8 @@ async function handleSend() {
   sending.value = true
 
   try {
-    const response = await ragQaChatStream({ userMessage: text, threadId })
+    const dept = localStorage.getItem('selectedDepartment') || undefined
+    const response = await ragQaChatStream({ userMessage: text, threadId, department: dept })
 
     if (!response.ok || !response.body) {
       throw new Error('SSE not supported')
@@ -268,7 +269,7 @@ async function handleSend() {
     // 流式失败降级为非流式
     chatStore.appendContent(threadId, assistantMsgId, '')
     try {
-      const response = await ragQaChat({ userMessage: text, threadId })
+      const response = await ragQaChat({ userMessage: text, threadId, department: localStorage.getItem('selectedDepartment') || undefined })
       const msgs = chatStore.messages[threadId]
       if (msgs) {
         const msg = msgs.find(m => m.id === assistantMsgId)
