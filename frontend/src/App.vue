@@ -54,6 +54,23 @@
           </template>
         </div>
 
+        <!-- Department Switcher -->
+        <div class="sidebar-dept" ref="deptMenuRef">
+          <div v-if="sidebarExpanded" class="dept-label">当前部门</div>
+          <div class="dept-toggle" :class="{ expanded: sidebarExpanded }" @click="deptMenuVisible = !deptMenuVisible">
+            <span class="dept-icon">🏢</span>
+            <span v-if="sidebarExpanded" class="dept-name">{{ currentDepartment }}</span>
+            <span v-if="sidebarExpanded" class="dept-arrow" :class="{ open: deptMenuVisible }">▼</span>
+          </div>
+          <div v-if="deptMenuVisible" class="dept-menu">
+            <div v-for="dept in DEPARTMENTS" :key="dept"
+              class="dept-item" :class="{ active: currentDepartment === dept }"
+              @click="switchDepartment(dept); deptMenuVisible = false">
+              {{ dept }}
+            </div>
+          </div>
+        </div>
+
         <div class="sidebar-footer">
           <div class="user-menu-wrapper" ref="userMenuRef">
             <div
@@ -95,6 +112,7 @@ import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ChatDotRound, Collection, Document, SwitchButton, Fold, Expand } from '@element-plus/icons-vue'
 import { authLogout } from '@/api/agent'
+import { DEPARTMENTS } from '@/constants/departments'
 
 interface UserInfo {
   id?: number
@@ -128,9 +146,21 @@ const userMenuVisible = ref(false)
 const userMenuRef = ref<HTMLElement | null>(null)
 const sidebarExpanded = ref(false)
 
+const currentDepartment = ref(localStorage.getItem('selectedDepartment') || readUserFromStorage()?.department || '全公司')
+const deptMenuVisible = ref(false)
+const deptMenuRef = ref<HTMLElement | null>(null)
+
+function switchDepartment(dept: string) {
+  currentDepartment.value = dept
+  localStorage.setItem('selectedDepartment', dept)
+}
+
 function onDocumentClick(e: MouseEvent) {
   if (userMenuRef.value && !userMenuRef.value.contains(e.target as Node)) {
     userMenuVisible.value = false
+  }
+  if (deptMenuRef.value && !deptMenuRef.value.contains(e.target as Node)) {
+    deptMenuVisible.value = false
   }
 }
 
@@ -328,6 +358,76 @@ async function handleLogout() {
   white-space: nowrap;
 }
 
+/* Department Switcher */
+.sidebar-dept {
+  padding: 0 12px 4px;
+  position: relative;
+}
+.icon-sidebar:not(.expanded) .sidebar-dept {
+  display: flex;
+  justify-content: center;
+  padding: 0 0 4px;
+}
+.dept-label {
+  font-size: 10px;
+  color: #555;
+  text-transform: uppercase;
+  padding: 0 8px 6px;
+  letter-spacing: 0.5px;
+}
+.dept-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 13px;
+  color: #ccc;
+  transition: background 0.15s;
+}
+.dept-toggle:hover { background: rgba(255,255,255,0.08); }
+.dept-toggle:not(.expanded) {
+  justify-content: center;
+  padding: 8px;
+}
+.dept-icon { font-size: 14px; flex-shrink: 0; }
+.dept-name { flex: 1; }
+.dept-arrow {
+  font-size: 9px;
+  color: #666;
+  transition: transform 0.15s;
+}
+.dept-arrow.open { transform: rotate(180deg); }
+.dept-menu {
+  position: absolute;
+  top: 100%;
+  left: 12px;
+  right: 12px;
+  background: #333;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  z-index: 95;
+  margin-top: 2px;
+}
+.icon-sidebar:not(.expanded) .dept-menu {
+  left: 0;
+  right: auto;
+  width: 180px;
+}
+.dept-item {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #999;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+.dept-item:hover { color: #ccc; background: rgba(255,255,255,0.04); }
+.dept-item.active { color: var(--primary); background: rgba(232,112,64,0.12); }
+
 /* Footer / user area */
 .sidebar-footer {
   padding-top: 8px;
@@ -394,10 +494,10 @@ async function handleLogout() {
   position: absolute;
   bottom: 46px;
   left: 4px;
-  width: 240px;
+  width: 200px;
   background: var(--white);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
   border: 1px solid var(--border-light);
   overflow: hidden;
   z-index: 1000;
@@ -406,20 +506,20 @@ async function handleLogout() {
 .user-popup-info {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: 8px;
+  padding: 10px 12px;
 }
 
 .user-popup-avatar {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: var(--primary);
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 700;
   flex-shrink: 0;
 }
@@ -427,11 +527,11 @@ async function handleLogout() {
 .user-popup-details {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .user-popup-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -444,9 +544,9 @@ async function handleLogout() {
 .user-popup-action {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  font-size: 13px;
+  gap: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
   color: var(--text-secondary);
   cursor: pointer;
   transition: background 0.15s;
