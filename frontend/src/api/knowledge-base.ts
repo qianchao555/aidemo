@@ -7,12 +7,13 @@ export const ingestText = (data: IngestRequest) =>
 export const ingestFile = (data: IngestFileRequest) =>
   post<{ success: boolean; message: string; filePath: string }>('/knowledge-base/ingest-file', data)
 
-export const uploadFile = (file: File, parserCategory?: string, category?: string, description?: string) => {
+export const uploadFile = (file: File, parserCategory?: string, category?: string, description?: string, department?: string) => {
   const fd = new FormData()
   fd.append('file', file)
   if (parserCategory) fd.append('parserCategory', parserCategory)
   if (category) fd.append('category', category)
   if (description) fd.append('description', description)
+  if (department) fd.append('department', department)
   return post<{ success: boolean; message: string }>('/knowledge-base/upload', fd)
 }
 
@@ -26,6 +27,7 @@ export const getStats = () =>
 
 export interface DocumentListParams {
   category?: string
+  department?: string
   status?: string
   keyword?: string
   sortBy?: string

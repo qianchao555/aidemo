@@ -152,6 +152,7 @@ export interface ChatUser {
   username: string
   displayName: string
   role?: string
+  department?: string
 }
 
 /** 登录请求 */
@@ -166,6 +167,7 @@ export interface LoginResponse {
   username: string
   displayName: string
   role: string
+  department?: string
   token: string
 }
 
