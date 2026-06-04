@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xiaofuzi.ai.mapper.ChatUserMapper">
+
+    <resultMap id="ChatUserResult" type="com.xiaofuzi.ai.entity.ChatUser">
+        <id property="id" column="id"/>
+        <result property="username" column="username"/>
+        <result property="displayName" column="display_name"/>
+        <result property="createTime" column="create_time"/>
+        <result property="passwordHash" column="password_hash"/>
+        <result property="authToken" column="auth_token"/>
+        <result property="role" column="role"/>
+    </resultMap>
+
+    <select id="findAll" resultMap="ChatUserResult">
+        SELECT * FROM chat_user ORDER BY id
+    </select>
+
+    <select id="findByUsername" resultMap="ChatUserResult">
+        SELECT * FROM chat_user WHERE username = #{username}
+    </select>
+
+    <select id="findByToken" resultMap="ChatUserResult">
+        SELECT * FROM chat_user WHERE auth_token = #{token}
+    </select>
+
+    <update id="updateToken">
+        UPDATE chat_user SET auth_token = #{token} WHERE id = #{id}
+    </update>
+
+    <update id="clearToken">
+        UPDATE chat_user SET auth_token = NULL WHERE auth_token = #{token}
+    </update>
+
+    <update id="updatePasswordHash">
+        UPDATE chat_user SET password_hash = #{passwordHash} WHERE id = #{id}
+    </update>
+
+    <select id="findByPasswordHashIsNull" resultMap="ChatUserResult">
+        SELECT * FROM chat_user WHERE password_hash IS NULL
+    </select>
+
+    <update id="updateRole">
+        UPDATE chat_user SET role = #{role} WHERE id = #{id}
+    </update>
+
+</mapper>

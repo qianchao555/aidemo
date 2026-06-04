@@ -7,6 +7,14 @@ const http = axios.create({
   timeout: 30000
 })
 
+http.interceptors.request.use((config) => {
+  const token = localStorage.getItem('authToken')
+  if (token) {
+    config.headers.Authorization = 'Bearer ' + token
+  }
+  return config
+})
+
 http.interceptors.response.use(
   (response) => {
     const data = response.data as ApiResponse
@@ -17,6 +25,17 @@ http.interceptors.response.use(
     return response
   },
   (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('authToken')
+      localStorage.removeItem('currentUser')
+      ElMessage.error('登录已过期，请重新登录')
+      window.location.href = '/login'
+      return Promise.reject(error)
+    }
+    if (error.response?.status === 403) {
+      ElMessage.error('权限不足')
+      return Promise.reject(error)
+    }
     ElMessage.error(error.message || '网络异常')
     return Promise.reject(error)
   }

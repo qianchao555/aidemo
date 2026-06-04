@@ -1,114 +1,79 @@
 <template>
   <div class="kb-page">
-    <el-tabs v-model="activeTab">
-      <!-- Tab 1: 文本摄入 -->
-<!--      <el-tab-pane label="文本摄入" name="text">-->
-<!--        <el-form :model="textForm" label-width="80px">-->
-<!--          <el-form-item label="文本内容">-->
-<!--            <el-input v-model="textForm.content" type="textarea" :rows="5" placeholder="输入要摄入的知识文本" />-->
-<!--          </el-form-item>-->
-<!--          <el-form-item label="元数据">-->
-<!--            <el-input v-model="textForm.metadataJson" type="textarea" :rows="2" placeholder='{"source": "manual"}' />-->
-<!--          </el-form-item>-->
-<!--          <el-form-item>-->
-<!--            <el-button type="primary" :loading="store.loading" @click="handleIngestText">提交摄入</el-button>-->
-<!--          </el-form-item>-->
-<!--        </el-form>-->
-<!--      </el-tab-pane>-->
+    <div class="kb-page-header">
+      <h2 class="kb-page-title">知识库管理</h2>
+      <p class="kb-page-subtitle">管理文档、上传文件、搜索知识</p>
+    </div>
 
-      <!-- Tab 2: 文件路径摄入 -->
-<!--      <el-tab-pane label="文件路径摄入" name="filepath">-->
-<!--        <el-form :model="filePathForm" label-width="100px">-->
-<!--          <el-form-item label="文件路径">-->
-<!--            <el-input v-model="filePathForm.filePath" placeholder="/data/documents/readme.md" />-->
-<!--          </el-form-item>-->
-<!--          <el-form-item label="解析器类别">-->
-<!--            <el-select v-model="filePathForm.parserCategory" placeholder="选择解析器" clearable style="width: 200px">-->
-<!--              <el-option label="Markdown" value="markdown" />-->
-<!--              <el-option label="PDF" value="pdf" />-->
-<!--              <el-option label="Word" value="word" />-->
-<!--              <el-option label="TXT" value="txt" />-->
-<!--            </el-select>-->
-<!--          </el-form-item>-->
-<!--          <el-form-item>-->
-<!--            <el-button type="primary" :loading="store.loading" @click="handleIngestFile">提交摄入</el-button>-->
-<!--          </el-form-item>-->
-<!--        </el-form>-->
-<!--      </el-tab-pane>-->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-card-label">文档总数</div>
+        <div class="stat-card-value">{{ store.docCount }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-label">向量分块总数</div>
+        <div class="stat-card-value">{{ store.chunkCount }}</div>
+      </div>
+      <div class="stat-card" v-if="Object.keys(store.categoryStats).length > 0">
+        <div class="stat-card-label">分类统计</div>
+        <div class="stat-card-tags">
+          <el-tag v-for="(cnt, cat) in store.categoryStats" :key="cat" size="small" type="primary" style="margin-right: 4px">{{ cat }}: {{ cnt }}</el-tag>
+        </div>
+      </div>
+    </div>
 
-      <!-- Tab 3: 文件上传摄入 -->
-      <el-tab-pane label="文件上传" name="upload">
-        <el-form label-width="100px">
-          <el-form-item label="选择文件">
-            <el-upload
-              ref="uploadRef"
-              :auto-upload="false"
-              :limit="1"
-              :on-change="handleFileChange"
-              :on-remove="() => uploadFile = null"
-              accept=".pdf,.doc,.docx,.txt,.md"
-              drag
-            >
-              <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
-              <div class="el-upload__text">拖拽文件到此处 或 <em>点击上传</em></div>
-            </el-upload>
-          </el-form-item>
-          <el-form-item label="分类">
-            <el-select v-model="uploadCategory" placeholder="选择分类" clearable style="width: 200px">
-              <el-option label="请假" value="请假" />
-              <el-option label="考勤" value="考勤" />
-              <el-option label="报销" value="报销" />
-              <el-option label="入职" value="入职" />
-              <el-option label="离职" value="离职" />
-              <el-option label="转正" value="转正" />
+    <div class="kb-card">
+      <div class="kb-card-header">文件上传</div>
+      <div class="kb-card-body">
+        <div class="upload-options">
+          <div class="upload-option">
+            <label class="upload-label">文档类型</label>
+            <el-select v-model="uploadCategory" placeholder="选择文档类型" style="width: 180px" size="default">
+              <el-option label="制度文档" value="制度" />
+              <el-option label="流程文档" value="流程" />
+              <el-option label="FAQ文档" value="FAQ" />
+              <el-option label="自动检测" value="" />
             </el-select>
-          </el-form-item>
-          <el-form-item label="解析器">
-            <el-select v-model="uploadParserCategory" placeholder="可自动检测" clearable style="width: 200px">
+          </div>
+          <div class="upload-option">
+            <label class="upload-label">解析器</label>
+            <el-select v-model="uploadParserCategory" placeholder="可自动检测" clearable style="width: 180px" size="default">
               <el-option label="PDF" value="pdf" />
               <el-option label="Word" value="word" />
               <el-option label="TXT" value="txt" />
               <el-option label="Markdown" value="markdown" />
             </el-select>
-          </el-form-item>
-          <el-form-item label="描述">
-            <el-input v-model="uploadDescription" placeholder="可选，简要描述文档内容" />
-          </el-form-item>
-          <el-form-item>
-            <el-button type="primary" :loading="store.loading" :disabled="!uploadFile" @click="handleUpload">
-              上传并摄入
-            </el-button>
-          </el-form-item>
-        </el-form>
-      </el-tab-pane>
-      <!-- Tab 4: 文档管理 -->
-      <el-tab-pane label="文档管理" name="documents">
-        <!-- 统计卡片 -->
-        <el-row :gutter="20" style="margin-bottom: 16px">
-          <el-col :span="6">
-            <el-card shadow="hover">
-              <el-statistic title="文档总数" :value="store.docCount" />
-            </el-card>
-          </el-col>
-          <el-col :span="6">
-            <el-card shadow="hover">
-              <el-statistic title="向量分块总数" :value="store.chunkCount" />
-            </el-card>
-          </el-col>
-        </el-row>
-        <div v-if="Object.keys(store.categoryStats).length > 0" style="margin-bottom: 12px">
-          <el-space wrap>
-            <el-tag
-              v-for="(cnt, cat) in store.categoryStats"
-              :key="cat"
-              type="primary"
-            >{{ cat }}: {{ cnt }}</el-tag>
-          </el-space>
+          </div>
+          <div class="upload-option upload-option-desc">
+            <label class="upload-label">描述</label>
+            <el-input v-model="uploadDescription" placeholder="可选，简要描述文档内容" style="width: 260px" />
+          </div>
         </div>
+        <el-upload
+          ref="uploadRef"
+          :auto-upload="false"
+          :limit="1"
+          :on-change="handleFileChange"
+          :on-remove="() => uploadFile = null"
+          accept=".pdf,.doc,.docx,.txt,.md"
+          drag
+          class="styled-upload"
+        >
+          <el-icon class="el-icon--upload" :size="28" color="#ccc"><UploadFilled /></el-icon>
+          <div class="el-upload__text">拖拽文件到此处 或 <em>点击上传</em></div>
+          <div class="el-upload__hint">支持 PDF、Word、TXT、Markdown</div>
+        </el-upload>
+        <el-button type="primary" :loading="store.loading" :disabled="!uploadFile" @click="handleUpload" style="margin-top: 12px">
+          上传并摄入
+        </el-button>
+      </div>
+    </div>
 
-        <!-- 工具栏 -->
-        <div class="doc-toolbar">
-          <el-select v-model="docFilterCategory" placeholder="按分类筛选" clearable style="width: 160px" @change="handleFetchDocuments">
+    <div class="kb-card">
+      <div class="kb-card-header">
+        <span>文档列表</span>
+        <div class="kb-card-header-actions">
+          <el-select v-model="docFilterCategory" placeholder="按分类筛选" clearable size="small" style="width: 140px" @change="handleFetchDocuments">
             <el-option label="请假" value="请假" />
             <el-option label="考勤" value="考勤" />
             <el-option label="报销" value="报销" />
@@ -116,14 +81,15 @@
             <el-option label="离职" value="离职" />
             <el-option label="转正" value="转正" />
           </el-select>
-          <el-select v-model="docFilterStatus" placeholder="按状态筛选" clearable style="width: 140px; margin-left: 10px" @change="handleFetchDocuments">
+          <el-select v-model="docFilterStatus" placeholder="按状态筛选" clearable size="small" style="width: 120px; margin-left: 8px" @change="handleFetchDocuments">
             <el-option label="活跃" value="active" />
             <el-option label="已删除" value="deleted" />
           </el-select>
-          <el-button type="primary" @click="handleRefreshDocuments" style="margin-left: 10px">刷新</el-button>
+          <el-button size="small" @click="handleRefreshDocuments" style="margin-left: 8px">刷新</el-button>
         </div>
-
-        <el-table :data="store.documentList" v-loading="store.documentLoading" stripe border style="width: 100%; margin-top: 12px">
+      </div>
+      <div class="kb-card-body" style="padding-top: 0">
+        <el-table :data="store.documentList" v-loading="store.documentLoading" stripe style="width: 100%">
           <el-table-column prop="id" label="ID" width="60" />
           <el-table-column prop="documentName" label="文档名称" min-width="180" show-overflow-tooltip />
           <el-table-column prop="documentType" label="类型" width="80" />
@@ -157,14 +123,11 @@
         </el-table>
         <el-empty v-if="!store.documentLoading && store.documentList.length === 0" description="暂无文档" />
 
-        <!-- 文档详情弹窗 -->
         <el-dialog v-model="detailVisible" title="文档详情" width="560px">
           <el-descriptions v-if="detailRow" :column="2" border>
             <el-descriptions-item label="ID">{{ detailRow.id }}</el-descriptions-item>
             <el-descriptions-item label="状态">
-              <el-tag :type="detailRow.status === 'active' ? 'success' : 'info'" size="small">
-                {{ detailRow.status || '-' }}
-              </el-tag>
+              <el-tag :type="detailRow.status === 'active' ? 'success' : 'info'" size="small">{{ detailRow.status || '-' }}</el-tag>
             </el-descriptions-item>
             <el-descriptions-item label="文档名称" :span="2">{{ detailRow.documentName }}</el-descriptions-item>
             <el-descriptions-item label="类型">{{ detailRow.documentType }}</el-descriptions-item>
@@ -181,78 +144,38 @@
           </el-descriptions>
         </el-dialog>
 
-        <input
-          ref="reingestFileInput"
-          type="file"
-          accept=".pdf,.doc,.docx,.txt,.md"
-          style="display: none"
-          @change="onReingestFileChange"
-        />
+        <input ref="reingestFileInput" type="file" accept=".pdf,.doc,.docx,.txt,.md" style="display: none" @change="onReingestFileChange" />
+      </div>
+    </div>
 
-        <!-- 知识搜索 -->
-        <el-divider />
-        <div class="search-section">
-          <h3>知识搜索</h3>
-          <div class="search-row">
-            <el-input v-model="searchQuery" placeholder="输入搜索内容" style="width: 400px" @keyup.enter="handleSearch" />
-            <span class="topk-label">TopK:</span>
-            <el-input-number v-model="searchTopK" :min="1" :max="20" size="small" />
-            <el-button type="primary" :loading="store.loading" @click="handleSearch" style="margin-left: 10px">搜索</el-button>
-          </div>
-          <div v-if="store.searchResult" class="search-result">
-            <p class="result-meta">命中 {{ store.hitCount }} 条结果</p>
-            <el-card shadow="always" class="result-card">
-              <pre class="result-text">{{ store.searchResult }}</pre>
-            </el-card>
+    <div class="kb-card">
+      <div class="kb-card-header">知识搜索</div>
+      <div class="kb-card-body">
+        <div class="search-row">
+          <el-input v-model="searchQuery" placeholder="输入搜索内容" style="width: 400px" @keyup.enter="handleSearch" />
+          <span class="topk-label">TopK:</span>
+          <el-input-number v-model="searchTopK" :min="1" :max="20" size="small" />
+          <el-button type="primary" :loading="store.loading" @click="handleSearch" style="margin-left: 10px">搜索</el-button>
+        </div>
+        <div v-if="store.searchResult" class="search-result">
+          <p class="result-meta">命中 {{ store.hitCount }} 条结果</p>
+          <div class="result-card">
+            <pre class="result-text">{{ store.searchResult }}</pre>
           </div>
         </div>
-      </el-tab-pane>
-    </el-tabs>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useKnowledgeStore } from '@/stores/knowledge-base'
 import type { KnowledgeDocument } from '@/types'
 
 const store = useKnowledgeStore()
-const activeTab = ref('upload')
-
-// 文本摄入
-const textForm = reactive({ content: '', metadataJson: '' })
-async function handleIngestText() {
-  if (!textForm.content.trim()) {
-    ElMessage.warning('请输入文本内容')
-    return
-  }
-  let metadata: Record<string, unknown> | undefined
-  if (textForm.metadataJson.trim()) {
-    try { metadata = JSON.parse(textForm.metadataJson) }
-    catch { ElMessage.warning('元数据 JSON 格式不正确'); return }
-  }
-  await store.ingest({ content: textForm.content, metadata })
-  ElMessage.success('文本摄入成功')
-  textForm.content = ''
-  textForm.metadataJson = ''
-}
-
-// 文件路径摄入
-const filePathForm = reactive({ filePath: '', parserCategory: '' })
-async function handleIngestFile() {
-  if (!filePathForm.filePath.trim()) {
-    ElMessage.warning('请输入文件路径')
-    return
-  }
-  await store.ingestByPath({
-    filePath: filePathForm.filePath,
-    parserCategory: filePathForm.parserCategory || undefined
-  })
-  ElMessage.success('文件摄入成功')
-  filePathForm.filePath = ''
-  filePathForm.parserCategory = ''
-}
+const uploadRef = ref()
 
 // 文件上传
 const uploadFile = ref<File | null>(null)
@@ -261,6 +184,9 @@ const uploadCategory = ref('')
 const uploadDescription = ref('')
 function handleFileChange(file: { raw?: File }) {
   uploadFile.value = file.raw || null
+}
+function triggerUpload() {
+  uploadRef.value?.$el?.querySelector('input')?.click()
 }
 async function handleUpload() {
   if (!uploadFile.value) return
@@ -354,16 +280,187 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.kb-page { background: #fff; padding: 20px; border-radius: 4px; }
-.search-section h3, .stats-section h3 { margin-bottom: 12px; font-size: 16px; }
-.search-row { display: flex; align-items: center; gap: 8px; }
-.topk-label { font-size: 14px; color: #606266; margin-left: 8px; }
-.search-result { margin-top: 16px; }
-.result-meta { font-size: 13px; color: #909399; margin-bottom: 8px; }
-.result-card { max-height: 400px; overflow: auto; }
-.result-text { white-space: pre-wrap; font-size: 13px; line-height: 1.6; margin: 0; }
-.doc-toolbar {
+.kb-page {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.kb-page-header {
+  margin-bottom: 18px;
+}
+
+.kb-page-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+}
+
+.kb-page-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* Stats Row */
+.stats-row {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.stat-card {
+  flex: 1;
+  background: var(--white);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+  box-shadow: var(--shadow-card);
+}
+
+.stat-card-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.stat-card-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.stat-card-tags {
+  margin-top: 4px;
+}
+
+/* KB Card */
+.kb-card {
+  background: var(--white);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+
+.kb-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-light);
+  background: var(--surface-warm);
+}
+
+.kb-card-header-actions {
   display: flex;
   align-items: center;
+}
+
+.kb-card-body {
+  padding: 16px 18px;
+}
+
+/* Upload */
+.upload-options {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.upload-option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.upload-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.styled-upload {
+  width: 100%;
+}
+
+.styled-upload :deep(.el-upload) {
+  width: 100%;
+}
+
+.styled-upload :deep(.el-upload-dragger) {
+  width: 100%;
+  border: 2px dashed #E0DCD5;
+  border-radius: var(--radius-md);
+  padding: 30px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.styled-upload :deep(.el-upload-dragger:hover) {
+  border-color: var(--primary);
+  background: rgba(232, 112, 64, 0.02);
+}
+
+.styled-upload :deep(.el-upload__text) {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-top: 10px;
+}
+
+.styled-upload :deep(.el-upload__text em) {
+  color: var(--primary);
+  font-style: normal;
+}
+
+.styled-upload :deep(.el-upload__hint) {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* Search */
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topk-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-left: 4px;
+}
+
+.search-result {
+  margin-top: 14px;
+}
+
+.result-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.result-card {
+  background: var(--surface-warm);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.result-text {
+  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0;
+  color: var(--text-primary);
 }
 </style>

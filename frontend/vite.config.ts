@@ -12,7 +12,9 @@ export default defineConfig({
     proxy: {
       '/agent': 'http://localhost:18989',
       '/faq': 'http://localhost:18989',
-      '/knowledge-base': 'http://localhost:18989'
+      '/knowledge-base': 'http://localhost:18989',
+      '/user': 'http://localhost:18989',
+      '/auth': 'http://localhost:18989'
     }
   }
 })

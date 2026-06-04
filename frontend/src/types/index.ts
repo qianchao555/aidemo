@@ -107,6 +107,35 @@ export interface KnowledgeStats {
   categories: Record<string, number>
 }
 
+/** FAQ 候选 */
+export interface FaqCandidate {
+  question: string
+  frequency: number
+}
+
+/** 用户 */
+export interface ChatUser {
+  id: number
+  username: string
+  displayName: string
+  role?: string
+}
+
+/** 登录请求 */
+export interface LoginRequest {
+  username: string
+  password: string
+}
+
+/** 登录响应 */
+export interface LoginResponse {
+  userId: number
+  username: string
+  displayName: string
+  role: string
+  token: string
+}
+
 /** 引用来源（ChatMessage 扩展字段） */
 export interface MessageSource {
   document: string

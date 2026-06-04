@@ -3,7 +3,9 @@ package com.xiaofuzi.ai.service;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.exception.GraphRunnerException;
 import com.xiaofuzi.ai.entity.ChatHistory;
+import com.xiaofuzi.ai.entity.ChatSession;
 import com.xiaofuzi.ai.mapper.ChatHistoryMapper;
+import com.xiaofuzi.ai.mapper.ChatSessionMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -13,7 +15,6 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 public class RagQaAgentService {
@@ -25,19 +26,22 @@ public class RagQaAgentService {
 
     private final ReactAgent ragQaAgent;
     private final ChatHistoryMapper chatHistoryMapper;
+    private final ChatSessionMapper chatSessionMapper;
 
     public RagQaAgentService(@Qualifier("ragQaAgent") ReactAgent ragQaAgent,
-                             ChatHistoryMapper chatHistoryMapper) {
+                             ChatHistoryMapper chatHistoryMapper,
+                             ChatSessionMapper chatSessionMapper) {
         this.ragQaAgent = ragQaAgent;
         this.chatHistoryMapper = chatHistoryMapper;
+        this.chatSessionMapper = chatSessionMapper;
     }
 
-    public String ask(String threadId, String question) {
+    public String ask(String threadId, Long userId, String question) {
         if (threadId == null || threadId.isBlank()) {
             threadId = UUID.randomUUID().toString().replace("-", "");
         }
 
-        logger.info("RAG问答请求 | threadId: {} | question: {}", threadId, question);
+        logger.info("RAG问答请求 | threadId: {} | userId: {} | question: {}", threadId, userId, question);
 
         //保存用户的对话信息
         saveHistory(threadId, "user", question, null, null);
@@ -51,6 +55,8 @@ public class RagQaAgentService {
             logger.info("RAG问答完成 | threadId: {} | 响应长度: {} 字符", threadId, responseText.length());
 
             saveHistory(threadId, "assistant", responseText, null, null);
+
+            updateSession(threadId, userId);
 
             return responseText;
         } catch (GraphRunnerException e) {
@@ -102,5 +108,37 @@ public class RagQaAgentService {
                 .createTime(LocalDateTime.now())
                 .build();
         chatHistoryMapper.insert(history);
+    }
+
+    private void updateSession(String threadId, Long userId) {
+        List<ChatHistory> history = chatHistoryMapper.findByThreadId(threadId);
+        int msgCount = history.size();
+
+        String title = history.stream()
+                .filter(h -> "user".equals(h.getRole()))
+                .findFirst()
+                .map(h -> {
+                    String c = h.getContent();
+                    return c != null && c.length() > 30 ? c.substring(0, 30) + "..." : c;
+                })
+                .orElse("新对话");
+
+        ChatSession session = chatSessionMapper.findByThreadId(threadId);
+        if (session != null) {
+            session.setTitle(title);
+            session.setMessageCount(msgCount);
+            session.setUpdateTime(LocalDateTime.now());
+            chatSessionMapper.update(session);
+        } else {
+            ChatSession newSession = ChatSession.builder()
+                    .threadId(threadId)
+                    .userId(userId)
+                    .title(title)
+                    .messageCount(msgCount)
+                    .createTime(LocalDateTime.now())
+                    .updateTime(LocalDateTime.now())
+                    .build();
+            chatSessionMapper.insert(newSession);
+        }
     }
 }

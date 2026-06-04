@@ -1,13 +1,15 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { listFaq, createFaq, updateFaq, deleteFaq } from '@/api/faq'
-import type { FaqEntry } from '@/types'
+import { listFaq, createFaq, updateFaq, deleteFaq, faqCandidates } from '@/api/faq'
+import type { FaqEntry, FaqCandidate } from '@/types'
 
 export const useFaqStore = defineStore('faq', () => {
   const faqList = ref<FaqEntry[]>([])
   const loading = ref(false)
 
   const categories = ref<string[]>([])
+  const candidates = ref<FaqCandidate[]>([])
+  const candidatesLoading = ref(false)
 
   async function fetchList(params?: { category?: string; keyword?: string }) {
     loading.value = true
@@ -34,5 +36,15 @@ export const useFaqStore = defineStore('faq', () => {
     await fetchList()
   }
 
-  return { faqList, loading, categories, fetchList, create, update, remove }
+  async function fetchCandidates(limit: number = 20, minFrequency: number = 3) {
+    candidatesLoading.value = true
+    try {
+      candidates.value = await faqCandidates(limit, minFrequency)
+    } finally {
+      candidatesLoading.value = false
+    }
+  }
+
+  return { faqList, loading, categories, candidates, candidatesLoading,
+    fetchList, create, update, remove, fetchCandidates }
 })

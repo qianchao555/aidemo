@@ -1,7 +1,8 @@
 package com.xiaofuzi.ai.controller;
 
+import com.xiaofuzi.ai.annotation.RequireRole;
 import com.xiaofuzi.ai.entity.FaqEntry;
-import com.xiaofuzi.ai.rag.FaqService;
+import com.xiaofuzi.ai.service.FaqService;
 import com.xiaofuzi.ai.vo.Result;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,12 +25,14 @@ public class FaqController {
 
     /***********************************FAQ 管理 API*******************************/
 
+    @RequireRole("admin")
     @PostMapping("/create-faq")
     public Result<FaqEntry> createFaq(@RequestBody FaqEntry faqEntry) {
         faqService.create(faqEntry);
         return Result.success(faqEntry);
     }
 
+    @RequireRole("admin")
     @PutMapping("/faq/{id}")
     public Result<FaqEntry> updateFaq(@PathVariable Long id, @RequestBody FaqEntry faqEntry) {
         faqEntry.setId(id);
@@ -37,6 +40,7 @@ public class FaqController {
         return Result.success(faqEntry);
     }
 
+    @RequireRole("admin")
     @DeleteMapping("/faq/{id}")
     public Result<Map<String, Object>> deleteFaq(@PathVariable Long id) {
         faqService.delete(id);
@@ -68,6 +72,14 @@ public class FaqController {
     public Result<List<FaqEntry>> highFreqFaq(@RequestParam(defaultValue = "10") int limit) {
         List<FaqEntry> list = faqService.topHighFreq(limit);
         return Result.success(list);
+    }
+
+    @RequireRole("admin")
+    @GetMapping("/faq/candidates")
+    public Result<List<Map<String, Object>>> faqCandidates(
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(defaultValue = "3") int minFrequency) {
+        return Result.success(faqService.getFaqCandidates(limit, minFrequency));
     }
 
 }

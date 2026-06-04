@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xiaofuzi.ai.mapper.ChatSessionMapper">
+
+    <resultMap id="ChatSessionResult" type="com.xiaofuzi.ai.entity.ChatSession">
+        <id property="id" column="id"/>
+        <result property="threadId" column="thread_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="title" column="title"/>
+        <result property="messageCount" column="message_count"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.xiaofuzi.ai.entity.ChatSession"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO chat_session (thread_id, user_id, title, message_count, create_time, update_time)
+        VALUES (#{threadId}, #{userId}, #{title}, #{messageCount}, #{createTime}, #{updateTime})
+    </insert>
+
+    <select id="findByThreadId" resultMap="ChatSessionResult">
+        SELECT * FROM chat_session WHERE thread_id = #{threadId}
+    </select>
+
+    <select id="findByUserId" resultMap="ChatSessionResult">
+        SELECT * FROM chat_session WHERE user_id = #{userId} ORDER BY update_time DESC
+    </select>
+
+    <update id="update" parameterType="com.xiaofuzi.ai.entity.ChatSession">
+        UPDATE chat_session
+        SET title = #{title},
+            message_count = #{messageCount},
+            update_time = #{updateTime}
+        WHERE thread_id = #{threadId}
+    </update>
+
+    <delete id="deleteByThreadId">
+        DELETE FROM chat_session WHERE thread_id = #{threadId}
+    </delete>
+
+</mapper>

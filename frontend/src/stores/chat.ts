@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { ChatMessage, ChatHistoryDto, SessionSummary, MessageSource } from '@/types'
-import { listSessions, getSessionHistory, deleteSessionApi } from '@/api/agent'
+import { createSessionApi, listSessions, getSessionHistory, deleteSessionApi } from '@/api/agent'
 
 export const useChatStore = defineStore('chat', () => {
   const sessions = ref<SessionSummary[]>([])
@@ -59,19 +59,26 @@ export const useChatStore = defineStore('chat', () => {
     return sources
   }
 
-  function createSession(): string {
+  async function createSession(): Promise<string> {
     const threadId = crypto.randomUUID()
-    sessions.value.unshift({
+    const localSession: SessionSummary = {
       threadId,
       title: '新对话',
       messageCount: 0,
       lastUpdateTime: new Date().toISOString()
-    })
+    }
+    sessions.value.unshift(localSession)
     messages.value[threadId] = []
     currentThreadId.value = threadId
     saveSessionsCache()
     saveMessagesCache()
     localStorage.setItem('currentThreadId', currentThreadId.value)
+
+    try {
+      await createSessionApi(threadId)
+    } catch {
+      // 后端失败时前端仍保留本地会话，下次 fetchSessions 会同步
+    }
     return threadId
   }
 

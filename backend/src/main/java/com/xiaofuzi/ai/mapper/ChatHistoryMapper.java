@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
+import java.util.Map;
 
 @Mapper
 public interface ChatHistoryMapper {
@@ -20,4 +21,6 @@ public interface ChatHistoryMapper {
     void deleteByThreadId(@Param("threadId") String threadId);
 
     List<ChatHistory> findAllThreadIds();
+
+    List<Map<String, Object>> findUserQueryFrequencies();
 }

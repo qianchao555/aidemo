@@ -1,10 +1,26 @@
 import { get, post, del } from './request'
-import type { SessionSummary, ChatHistoryDto } from '@/types'
+import type { SessionSummary, ChatHistoryDto, ChatUser, LoginRequest, LoginResponse } from '@/types'
 
 export interface ChatParams {
   userMessage: string
   threadId?: string
 }
+
+function getToken(): string {
+  return localStorage.getItem('authToken') || ''
+}
+
+/** 登录 */
+export const authLogin = (data: LoginRequest) =>
+  post<LoginResponse>('/auth/login', data)
+
+/** 登出 */
+export const authLogout = () =>
+  post<void>('/auth/logout')
+
+/** 当前用户信息 */
+export const authMe = () =>
+  get<LoginResponse>('/auth/me')
 
 /** 非流式 RAG 问答（保留兼容） */
 export const ragQaChat = (data: ChatParams) =>
@@ -14,9 +30,20 @@ export const ragQaChat = (data: ChatParams) =>
 export const ragQaChatStream = (data: ChatParams): Promise<Response> =>
   fetch('/agent/rag-qa/chat/stream', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + getToken()
+    },
     body: JSON.stringify(data)
   })
+
+/** 获取用户列表 */
+export const listUsers = () =>
+  get<ChatUser[]>('/user')
+
+/** 创建会话 */
+export const createSessionApi = (threadId: string, title?: string) =>
+  post<SessionSummary>('/agent/sessions', { threadId, title: title || '新对话' })
 
 /** 获取会话列表 */
 export const listSessions = () =>

@@ -1,5 +1,11 @@
 <template>
   <div class="faq-list-page">
+    <!-- Tab 导航 -->
+    <div class="faq-tabs">
+      <span class="faq-tab active">FAQ 列表</span>
+      <span class="faq-tab" @click="router.push('/faq/high-freq')">高频 FAQ</span>
+    </div>
+
     <!-- 顶部操作栏 -->
     <div class="toolbar">
       <div class="toolbar-left">
@@ -20,6 +26,58 @@
       </div>
       <el-button type="primary" @click="openDialog()">新建 FAQ</el-button>
     </div>
+
+    <!-- FAQ 候选挖掘 -->
+    <el-card shadow="never" style="margin-bottom: 16px">
+      <template #header>
+        <div style="display: flex; justify-content: space-between; align-items: center">
+          <span>
+            <strong>FAQ 候选</strong>
+            <span style="color: #909399; font-size: 13px; margin-left: 8px">从聊天记录中挖掘的高频提问</span>
+          </span>
+          <span style="display: flex; align-items: center; gap: 8px">
+            <span style="font-size: 13px; color: #606266">最低频次</span>
+            <el-input-number
+              v-model="minFrequency"
+              :min="2"
+              :max="100"
+              size="small"
+              style="width: 90px"
+            />
+            <el-button size="small" type="primary" :loading="faqStore.candidatesLoading" @click="loadCandidates">
+              挖掘候选
+            </el-button>
+          </span>
+        </div>
+      </template>
+      <el-table
+        v-if="faqStore.candidates.length > 0"
+        :data="faqStore.candidates"
+        size="small"
+        stripe
+        style="width: 100%"
+      >
+        <el-table-column type="index" label="#" width="50" />
+        <el-table-column prop="question" label="用户提问" min-width="300" show-overflow-tooltip />
+        <el-table-column prop="frequency" label="出现次数" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag type="warning" size="small">{{ row.frequency }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="120" align="center">
+          <template #default="{ row }">
+            <el-button type="primary" link size="small" @click="createFromCandidate(row.question)">
+              创建 FAQ
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <el-empty
+        v-else-if="!faqStore.candidatesLoading"
+        description="暂无候选，点击「挖掘候选」从聊天记录中发现高频问题"
+        :image-size="60"
+      />
+    </el-card>
 
     <!-- 表格 -->
     <el-table :data="faqStore.faqList" v-loading="faqStore.loading" stripe border style="width: 100%">
@@ -86,15 +144,19 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useFaqStore } from '@/stores/faq'
 import type { FaqEntry } from '@/types'
 
+const router = useRouter()
+
 const faqStore = useFaqStore()
 
 const filterCategory = ref('')
 const filterKeyword = ref('')
+const minFrequency = ref(3)
 
 const dialogVisible = ref(false)
 const isEdit = ref(false)
@@ -154,13 +216,67 @@ async function handleDelete(id: number) {
   ElMessage.success('FAQ 已删除')
 }
 
+function loadCandidates() {
+  faqStore.fetchCandidates(20, minFrequency.value)
+}
+
+function createFromCandidate(question: string) {
+  formData.value = { question, answer: '', keywords: '', category: '', status: 'active' }
+  isEdit.value = false
+  editId.value = null
+  dialogVisible.value = true
+}
+
 onMounted(() => {
   faqStore.fetchList()
 })
 </script>
 
 <style scoped>
-.faq-list-page { background: #fff; padding: 20px; border-radius: 4px; }
-.toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.toolbar-left { display: flex; align-items: center; }
+.faq-list-page {
+  background: var(--white);
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+}
+
+.faq-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--border-base);
+}
+
+.faq-tab {
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.15s;
+  user-select: none;
+}
+
+.faq-tab:hover {
+  color: var(--text-secondary);
+}
+
+.faq-tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
 </style>
