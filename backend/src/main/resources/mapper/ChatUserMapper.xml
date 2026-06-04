@@ -11,6 +11,7 @@
         <result property="passwordHash" column="password_hash"/>
         <result property="authToken" column="auth_token"/>
         <result property="role" column="role"/>
+        <result property="department" column="department"/>
     </resultMap>
 
     <select id="findAll" resultMap="ChatUserResult">
@@ -43,6 +44,10 @@
 
     <update id="updateRole">
         UPDATE chat_user SET role = #{role} WHERE id = #{id}
+    </update>
+
+    <update id="updateDepartment">
+        UPDATE chat_user SET department = #{department} WHERE id = #{id}
     </update>
 
 </mapper>
