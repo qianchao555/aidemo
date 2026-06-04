@@ -114,3 +114,17 @@ SELECT * FROM (VALUES
     ('wangwu', '王五')
 ) AS t(username, display_name)
 WHERE NOT EXISTS (SELECT 1 FROM chat_user);
+
+
+-- 用户认证与权限 migration
+ALTER TABLE chat_user
+    ADD COLUMN IF NOT EXISTS password_hash VARCHAR(256),
+    ADD COLUMN IF NOT EXISTS auth_token    VARCHAR(64),
+    ADD COLUMN IF NOT EXISTS role          VARCHAR(32) NOT NULL DEFAULT 'user';
+
+UPDATE chat_user SET role = 'admin' WHERE username = 'zhangsan';
+
+
+ALTER TABLE faq_entry ADD COLUMN IF NOT EXISTS last_hit_time TIMESTAMP;
+COMMENT ON COLUMN faq_entry.last_hit_time IS '最近一次命中时间';
+

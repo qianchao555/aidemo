@@ -34,7 +34,7 @@
           <template v-if="isAdmin">
             <div
               class="sidebar-nav-item"
-              :class="{ active: isActive('/faq/list') || isActive('/faq/high-freq') }"
+              :class="{ active: isActive('/faq/list') || isActive('/faq/dashboard') }"
               title="FAQ 管理"
               @click="navTo('/faq/list')"
             >

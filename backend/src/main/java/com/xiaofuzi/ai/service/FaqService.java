@@ -363,10 +363,83 @@ public class FaqService {
     //高频问题，每次FAQ被命中时，增加hitCount计数，定期分析高频问题，优化FAQ库内容和结构
     private void incrementHitFaq(FaqEntry entry) {
         try {
-            faqEntryMapper.incrementHitCount(entry.getId());
+            faqEntryMapper.updateHitCountAndTime(entry.getId());
         } catch (Exception e) {
             logger.warn("FAQ 命中计数更新失败: id={}", entry.getId(), e);
         }
+    }
+
+    public List<FaqEntry> findByFilters(String category, String status,
+                                         String keyword, String sortBy,
+                                         String sortOrder, int offset, int limit) {
+        return faqEntryMapper.findByFilters(category, status, keyword, sortBy, sortOrder, offset, limit);
+    }
+
+    public long countByFilters(String category, String status, String keyword) {
+        return faqEntryMapper.countByFilters(category, status, keyword);
+    }
+
+    public void batchUpdateCategory(List<Long> ids, String category) {
+        faqEntryMapper.batchUpdateCategory(ids, category);
+        logger.info("FAQ 批量更新分类: ids={}, category={}", ids, category);
+    }
+
+    public void batchUpdateStatus(List<Long> ids, String status) {
+        faqEntryMapper.batchUpdateStatus(ids, status);
+        logger.info("FAQ 批量更新状态: ids={}, status={}", ids, status);
+    }
+
+    public void batchDelete(List<Long> ids) {
+        faqEntryMapper.batchDelete(ids);
+        logger.info("FAQ 批量删除: ids={}", ids);
+    }
+
+    public List<Map<String, Object>> findSimilar(String question) {
+        if (question == null || question.isBlank()) return List.of();
+
+        List<FaqEntry> allActive = faqEntryMapper.findAllActive();
+        if (allActive.isEmpty()) return List.of();
+
+        float[] inputVec;
+        try {
+            inputVec = embeddingModel.embed(question);
+        } catch (Exception e) {
+            logger.warn("相似检测: embedding 失败", e);
+            return List.of();
+        }
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (FaqEntry entry : allActive) {
+            float[] entryVec;
+            try {
+                entryVec = embeddingModel.embed(entry.getQuestion());
+            } catch (Exception e) {
+                continue;
+            }
+            double sim = cosineSimilarity(inputVec, entryVec);
+            if (sim > 0.7) {
+                result.add(Map.of("id", entry.getId(), "question", entry.getQuestion(),
+                        "similarity", Math.round(sim * 1000.0) / 10.0));
+            }
+        }
+        result.sort((a, b) -> Double.compare((Double) b.get("similarity"), (Double) a.get("similarity")));
+        return result;
+    }
+
+    public Map<String, Object> getStats() {
+        long totalFaq = faqEntryMapper.countByFilters(null, "active", null);
+        long totalHits = faqEntryMapper.findAllActive().stream()
+                .mapToLong(f -> f.getHitCount() != null ? f.getHitCount() : 0).sum();
+        long todayHits = faqEntryMapper.countTodayHits();
+        return Map.of("totalFaq", totalFaq, "totalHits", totalHits, "todayHits", todayHits);
+    }
+
+    public List<Map<String, Object>> getDailyTrend(int days) {
+        return faqEntryMapper.dailyHitTrend(days);
+    }
+
+    public List<Map<String, Object>> getCategoryDistribution() {
+        return faqEntryMapper.categoryHitDistribution();
     }
 
     //FAQ问题和答案同步到向量数据库，形成可检索的知识库，提升RAG系统的问答能力

@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
+import java.util.Map;
 
 @Mapper
 public interface FaqEntryMapper {
@@ -26,4 +27,32 @@ public interface FaqEntryMapper {
     void incrementHitCount(@Param("id") Long id);
 
     void deleteById(@Param("id") Long id);
+
+    List<FaqEntry> findByFilters(@Param("category") String category,
+                                  @Param("status") String status,
+                                  @Param("keyword") String keyword,
+                                  @Param("sortBy") String sortBy,
+                                  @Param("sortOrder") String sortOrder,
+                                  @Param("offset") int offset,
+                                  @Param("limit") int limit);
+
+    long countByFilters(@Param("category") String category,
+                        @Param("status") String status,
+                        @Param("keyword") String keyword);
+
+    void batchUpdateCategory(@Param("ids") List<Long> ids, @Param("category") String category);
+
+    void batchUpdateStatus(@Param("ids") List<Long> ids, @Param("status") String status);
+
+    void batchDelete(@Param("ids") List<Long> ids);
+
+    void updateHitCountAndTime(@Param("id") Long id);
+
+    List<FaqEntry> findByIds(@Param("ids") List<Long> ids);
+
+    long countTodayHits();
+
+    List<Map<String, Object>> dailyHitTrend(@Param("days") int days);
+
+    List<Map<String, Object>> categoryHitDistribution();
 }

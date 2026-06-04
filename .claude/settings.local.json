@@ -13,7 +13,18 @@
       "Bash(npx vue-tsc *)",
       "Bash(git commit -m ' *)",
       "Bash(npm run *)",
-      "Bash(node -e \"const p = require\\('./node_modules/element-plus/package.json'\\); console.log\\(p.version\\)\")"
+      "Bash(node -e \"const p = require\\('./node_modules/element-plus/package.json'\\); console.log\\(p.version\\)\")",
+      "Bash(npm install *)",
+      "Bash(node -e \"console.log\\(require\\('./node_modules/@kangc/v-md-editor/package.json'\\).version\\)\")",
+      "Bash(node -e \"try{require.resolve\\('markdown-it'\\);console.log\\('found'\\)}catch\\(e\\){console.log\\('not found'\\)}\")",
+      "Bash(npm ls *)",
+      "Bash(npm i *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/faq/faq?page=1\\\\&size=5)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:18989/faq/faq?page=1\\\\&size=5)",
+      "Bash(curl *)",
+      "Bash(PGPASSWORD=123456 psql *)",
+      "Bash(netstat -ano)",
+      "Bash(powershell -Command \"Get-NetTCPConnection -LocalPort 18989 -ErrorAction SilentlyContinue | Select-Object -First 3 | Format-List\")"
     ]
   }
 }

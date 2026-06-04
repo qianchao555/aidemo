@@ -17,6 +17,10 @@
         <result property="updateTime" column="update_time"/>
     </resultMap>
 
+    <resultMap id="FaqEntryFullResult" type="com.xiaofuzi.ai.entity.FaqEntry" extends="FaqEntryResult">
+        <result property="lastHitTime" column="last_hit_time"/>
+    </resultMap>
+
     <insert id="insert" parameterType="com.xiaofuzi.ai.entity.FaqEntry"
             useGeneratedKeys="true" keyProperty="id">
         INSERT INTO faq_entry (question, answer, keywords, category, source_doc, heading_path,
@@ -38,20 +42,20 @@
         WHERE id = #{id}
     </update>
 
-    <select id="findById" resultMap="FaqEntryResult">
+    <select id="findById" resultMap="FaqEntryFullResult">
         SELECT * FROM faq_entry WHERE id = #{id}
     </select>
 
-    <select id="findAllActive" resultMap="FaqEntryResult">
+    <select id="findAllActive" resultMap="FaqEntryFullResult">
         SELECT * FROM faq_entry WHERE status = 'active' ORDER BY hit_count DESC
     </select>
 
-    <select id="findByCategory" resultMap="FaqEntryResult">
+    <select id="findByCategory" resultMap="FaqEntryFullResult">
         SELECT * FROM faq_entry WHERE category = #{category} AND status = 'active'
         ORDER BY hit_count DESC
     </select>
 
-    <select id="searchByKeyword" resultMap="FaqEntryResult">
+    <select id="searchByKeyword" resultMap="FaqEntryFullResult">
         SELECT * FROM faq_entry
         WHERE status = 'active'
           AND (question ILIKE CONCAT('%', #{keyword}, '%')
@@ -59,16 +63,101 @@
         ORDER BY hit_count DESC
     </select>
 
-    <select id="findTopByHitCount" resultMap="FaqEntryResult">
+    <select id="findTopByHitCount" resultMap="FaqEntryFullResult">
         SELECT * FROM faq_entry WHERE status = 'active' ORDER BY hit_count DESC LIMIT #{limit}
     </select>
 
     <update id="incrementHitCount">
-        UPDATE faq_entry SET hit_count = hit_count + 1, update_time = NOW() WHERE id = #{id}
+        UPDATE faq_entry SET hit_count = hit_count + 1, last_hit_time = NOW(), update_time = NOW() WHERE id = #{id}
     </update>
 
     <delete id="deleteById">
         UPDATE faq_entry SET status = 'deleted', update_time = NOW() WHERE id = #{id}
     </delete>
+
+    <select id="findByFilters" resultMap="FaqEntryFullResult">
+        SELECT * FROM faq_entry
+        <where>
+            <if test="category != null and category != ''">
+                AND category = #{category}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (question ILIKE CONCAT('%', #{keyword}, '%')
+                     OR keywords ILIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+        </where>
+        <choose>
+            <when test="sortBy != null and sortBy != '' and sortOrder != null and sortOrder != ''">
+                ORDER BY ${sortBy} ${sortOrder}
+            </when>
+            <otherwise>
+                ORDER BY hit_count DESC
+            </otherwise>
+        </choose>
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countByFilters" resultType="long">
+        SELECT COUNT(*) FROM faq_entry
+        <where>
+            <if test="category != null and category != ''">
+                AND category = #{category}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (question ILIKE CONCAT('%', #{keyword}, '%')
+                     OR keywords ILIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+        </where>
+    </select>
+
+    <update id="batchUpdateCategory">
+        UPDATE faq_entry SET category = #{category}, update_time = NOW()
+        WHERE id IN <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </update>
+
+    <update id="batchUpdateStatus">
+        UPDATE faq_entry SET status = #{status}, update_time = NOW()
+        WHERE id IN <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </update>
+
+    <update id="batchDelete">
+        UPDATE faq_entry SET status = 'deleted', update_time = NOW()
+        WHERE id IN <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </update>
+
+    <update id="updateHitCountAndTime">
+        UPDATE faq_entry SET hit_count = hit_count + 1, last_hit_time = NOW(), update_time = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <select id="findByIds" resultMap="FaqEntryFullResult">
+        SELECT * FROM faq_entry WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+
+    <select id="countTodayHits" resultType="long">
+        SELECT COUNT(*) FROM faq_entry WHERE last_hit_time >= CURRENT_DATE
+    </select>
+
+    <select id="dailyHitTrend" resultType="java.util.HashMap">
+        SELECT TO_CHAR(d.date, 'YYYY-MM-DD') AS day, COALESCE(COUNT(f.id), 0) AS cnt
+        FROM generate_series(CURRENT_DATE - (#{days} - 1), CURRENT_DATE, '1 day'::interval) d(date)
+        LEFT JOIN faq_entry f ON DATE(f.last_hit_time) = d.date
+        GROUP BY d.date ORDER BY d.date
+    </select>
+
+    <select id="categoryHitDistribution" resultType="java.util.HashMap">
+        SELECT category, SUM(hit_count) AS total_hits
+        FROM faq_entry
+        WHERE status = 'active' AND category IS NOT NULL AND category != ''
+        GROUP BY category
+        ORDER BY total_hits DESC
+    </select>
 
 </mapper>
