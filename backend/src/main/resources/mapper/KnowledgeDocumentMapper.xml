@@ -55,6 +55,9 @@
             <if test="keyword != null and keyword != ''">
                 AND document_name LIKE CONCAT('%', #{keyword}, '%')
             </if>
+            <if test="department != null and department != ''">
+                AND department = #{department}
+            </if>
         </where>
         <choose>
             <when test="sortBy != null and sortBy != '' and sortOrder != null and sortOrder != ''">
@@ -80,6 +83,9 @@
             </if>
             <if test="keyword != null and keyword != ''">
                 AND document_name LIKE CONCAT('%', #{keyword}, '%')
+            </if>
+            <if test="department != null and department != ''">
+                AND department = #{department}
             </if>
         </where>
     </select>
