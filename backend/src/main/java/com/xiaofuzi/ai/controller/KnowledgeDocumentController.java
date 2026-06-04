@@ -52,6 +52,7 @@ public class KnowledgeDocumentController {
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String department,
             @RequestParam(required = false, defaultValue = "update_time") String sortBy,
             @RequestParam(required = false, defaultValue = "desc") String sortOrder,
             @RequestParam(required = false, defaultValue = "1") int page,
@@ -72,8 +73,8 @@ public class KnowledgeDocumentController {
         int limit = Math.max(1, Math.min(size, 100));
 
         List<KnowledgeDocument> list = documentMapper.findByFilters(
-                category, status, keyword, sortBy, sortOrder, offset, limit);
-        long total = documentMapper.countByFilters(category, status, keyword);
+                category, status, keyword, department, sortBy, sortOrder, offset, limit);
+        long total = documentMapper.countByFilters(category, status, keyword, department);
 
         return Result.success(new PageResult<>(list, total));
     }

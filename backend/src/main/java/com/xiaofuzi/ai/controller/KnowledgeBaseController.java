@@ -30,12 +30,13 @@ public class KnowledgeBaseController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "parserCategory", required = false) String parserCategory,
             @RequestParam(value = "category", required = false) String category,
-            @RequestParam(value = "description", required = false) String description) {
+            @RequestParam(value = "description", required = false) String description,
+            @RequestParam(value = "department", required = false) String department) {
         if (file.isEmpty()) {
             return Result.error("上传文件不能为空");
         }
 
-        knowledgeBaseService.ingestMultipartFile(file, parserCategory, category, description);
+        knowledgeBaseService.ingestMultipartFile(file, parserCategory, category, description, department);
         logger.info("文件上传并摄入完成: {}", file.getOriginalFilename());
 
         return Result.success(Map.of(

@@ -43,6 +43,7 @@ public class AuthController {
                 .username(user.getUsername())
                 .displayName(user.getDisplayName())
                 .role(user.getRole() != null ? user.getRole() : "user")
+                .department(user.getDepartment() != null ? user.getDepartment() : "全公司")
                 .token(token)
                 .build();
 
@@ -71,6 +72,7 @@ public class AuthController {
                 .username(user.getUsername())
                 .displayName(user.getDisplayName())
                 .role(user.getRole() != null ? user.getRole() : "user")
+                .department(user.getDepartment() != null ? user.getDepartment() : "全公司")
                 .token(user.getAuthToken())
                 .build();
         return Result.success(resp);
