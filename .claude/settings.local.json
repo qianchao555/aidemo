@@ -53,7 +53,11 @@
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('version','?'\\), d.get\\('description','?'\\)\\)\")",
       "Bash(python3 -c \"import sys,json; icons=json.load\\(sys.stdin\\); matches=[k for k in icons if 'like' in k.lower\\(\\) or 'thumb' in k.lower\\(\\)]; print\\(json.dumps\\(matches, indent=2\\)\\)\")",
       "Bash(git *)",
-      "Bash(mvnw compile *)"
+      "Bash(mvnw compile *)",
+      "Bash(npx vite *)",
+      "Bash(mvn test-compile *)",
+      "Bash(mvn test *)",
+      "Bash(mvn verify *)"
     ]
   }
 }

@@ -2,6 +2,7 @@ package com.xiaofuzi.ai.interceptor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xiaofuzi.ai.annotation.RequireRole;
+import com.xiaofuzi.ai.config.WebMvcConfig;
 import com.xiaofuzi.ai.context.UserContext;
 import com.xiaofuzi.ai.entity.ChatUser;
 import com.xiaofuzi.ai.mapper.ChatUserMapper;
@@ -32,7 +33,7 @@ public class LoginInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response,
                              Object handler) throws Exception {
         // 放行登录接口
-        if (request.getRequestURI().equals("/auth/login")) {
+        if (request.getRequestURI().equals(WebMvcConfig.LOGIN_PATH)) {
             return true;
         }
 

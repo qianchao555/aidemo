@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -23,20 +24,24 @@ public class FileSystemServerTools {
 
     private static final Logger logger = LoggerFactory.getLogger(FileSystemServerTools.class);
 
-    private static final Path WORK_DIR = Paths.get(System.getProperty("user.dir"), "workspace");
+    private final Path workDir;
+
+    public FileSystemServerTools(@Value("${app.workspace.path:./workspace}") String workspacePath) {
+        this.workDir = Paths.get(workspacePath).toAbsolutePath().normalize();
+    }
 
     private Path resolvePath(String relativePath) {
-        Path resolved = WORK_DIR.resolve(relativePath).normalize();
-        if (!resolved.startsWith(WORK_DIR)) {
+        Path resolved = workDir.resolve(relativePath).normalize();
+        if (!resolved.startsWith(workDir)) {
             throw new SecurityException("Path traversal denied: " + relativePath);
         }
         return resolved;
     }
 
     private void ensureWorkDir() throws IOException {
-        if (!Files.exists(WORK_DIR)) {
-            Files.createDirectories(WORK_DIR);
-            logger.info("Workspace directory created: {}", WORK_DIR.toAbsolutePath());
+        if (!Files.exists(workDir)) {
+            Files.createDirectories(workDir);
+            logger.info("Workspace directory created: {}", workDir.toAbsolutePath());
         }
     }
 
@@ -149,7 +154,7 @@ public class FileSystemServerTools {
                     .filter(p -> !p.equals(targetDir))
                     .map(p -> {
                         Map<String, Object> entry = new HashMap<>();
-                        String relative = WORK_DIR.relativize(p).toString().replace("\\", "/");
+                        String relative = workDir.relativize(p).toString().replace("\\", "/");
                         entry.put("path", relative);
                         entry.put("type", Files.isDirectory(p) ? "directory" : "file");
                         try {

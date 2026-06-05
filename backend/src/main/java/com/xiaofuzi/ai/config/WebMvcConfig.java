@@ -8,6 +8,9 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
 
+    /** 无需登录验证的路径 */
+    public static final String LOGIN_PATH = "/auth/login";
+
     private final LoginInterceptor loginInterceptor;
 
     public WebMvcConfig(LoginInterceptor loginInterceptor) {
@@ -18,6 +21,6 @@ public class WebMvcConfig implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(loginInterceptor)
                 .addPathPatterns("/**")
-                .excludePathPatterns("/auth/login");
+                .excludePathPatterns(LOGIN_PATH);
     }
 }

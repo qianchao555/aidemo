@@ -46,12 +46,14 @@ public class KnowledgeBaseController {
         ));
     }
 
+    private static final int SEARCH_CONTEXT_MAX_LENGTH = 5000;
+
     @GetMapping("/search")
     public Result<Map<String, Object>> searchKnowledge(
             @RequestParam String query,
             @RequestParam(defaultValue = "5") int topK) {
         List<Document> results = knowledgeBaseService.search(query, topK);
-        String formatted = knowledgeBaseService.formatAsContext(results, 5000);
+        String formatted = knowledgeBaseService.formatAsContext(results, SEARCH_CONTEXT_MAX_LENGTH);
 
         return Result.success(Map.of(
                 "success", true,

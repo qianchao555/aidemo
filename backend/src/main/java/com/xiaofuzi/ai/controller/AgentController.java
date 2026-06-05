@@ -15,6 +15,7 @@ import com.xiaofuzi.ai.service.RagQaAgentService;
 import com.xiaofuzi.ai.vo.Result;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -45,6 +46,9 @@ public class AgentController {
     private static final Pattern SUGGESTIONS_STRIP_NO_NEWLINE =
             Pattern.compile("💡\\s*您可以继续问[：:][\\s\\S]*$");
 
+    private static final String DEFAULT_SESSION_TITLE = "新对话";
+    private static final String THINKING_MESSAGE = "正在检索知识库...";
+
     private final RagQaAgentService ragQaAgentService;
     private final ChatHistoryMapper chatHistoryMapper;
     private final ChatSessionMapper chatSessionMapper;
@@ -52,6 +56,12 @@ public class AgentController {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ExecutorService sseExecutor = Executors.newCachedThreadPool();
+
+    @Value("${app.agent.sse.timeout-ms:180000}")
+    private long sseTimeoutMs;
+
+    @Value("${app.agent.sse.token-delay-ms:30}")
+    private long tokenDelayMs;
 
     public AgentController(RagQaAgentService ragQaAgentService,
                            ChatHistoryMapper chatHistoryMapper,
@@ -82,10 +92,10 @@ public class AgentController {
         String userMessage = request.getUserMessage();
         String threadId = request.getThreadId();
         if (threadId == null || threadId.isBlank()) {
-            threadId = UUID.randomUUID().toString().replace("-", "");
+            threadId = com.xiaofuzi.ai.util.AppConstants.uuidNoDash();
         }
 
-        SseEmitter emitter = new SseEmitter(180_000L);
+        SseEmitter emitter = new SseEmitter(sseTimeoutMs);
         final String finalThreadId = threadId;
         final Long finalUserId = UserContext.get().getId();
 
@@ -103,7 +113,7 @@ public class AgentController {
             try {
                 // 使用 ObjectMapper 显式序列化为 JSON，避免 SseEmitter 内部 toString() 问题
                 String thinkingJson = objectMapper.writeValueAsString(
-                        Map.of("type", "thinking", "content", "正在检索知识库..."));
+                        Map.of("type", "thinking", "content", THINKING_MESSAGE));
                 emitter.send(SseEmitter.event().name("thinking").data(thinkingJson));
 
                 RagQaAgentService.AskResult result = ragQaAgentService.ask(finalThreadId, finalUserId, userMessage);
@@ -134,7 +144,7 @@ public class AgentController {
                 String[] segments = cleanResponse.split("(?<=[。！？\\n])");
                 for (String segment : segments) {
                     if (segment.trim().isEmpty()) continue;
-                    Thread.sleep(30);
+                    Thread.sleep(tokenDelayMs);
                     String tokenJson = objectMapper.writeValueAsString(
                             Map.of("type", "token", "content", segment));
                     emitter.send(SseEmitter.event().name("token").data(tokenJson));
@@ -179,7 +189,7 @@ public class AgentController {
     @PostMapping("/sessions")
     public Result<SessionSummary> createSession(@RequestBody Map<String, Object> body) {
         String threadId = (String) body.getOrDefault("threadId", UUID.randomUUID().toString());
-        String title = (String) body.getOrDefault("title", "新对话");
+        String title = (String) body.getOrDefault("title", DEFAULT_SESSION_TITLE);
         Long userId = UserContext.get().getId();
 
         ChatSession session = ChatSession.builder()

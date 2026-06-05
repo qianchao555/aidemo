@@ -9,10 +9,10 @@ import com.xiaofuzi.ai.vo.Result;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/auth")
@@ -22,6 +22,12 @@ public class AuthController {
 
     private final ChatUserMapper chatUserMapper;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+
+    @Value("${app.init.default-role:user}")
+    private String defaultRole;
+
+    @Value("${app.init.default-department:全公司}")
+    private String defaultDepartment;
 
     public AuthController(ChatUserMapper chatUserMapper) {
         this.chatUserMapper = chatUserMapper;
@@ -35,15 +41,15 @@ public class AuthController {
             return Result.error("用户名或密码错误");
         }
 
-        String token = UUID.randomUUID().toString().replace("-", "");
+        String token = com.xiaofuzi.ai.util.AppConstants.uuidNoDash();
         chatUserMapper.updateToken(user.getId(), token);
 
         LoginResponse resp = LoginResponse.builder()
                 .userId(user.getId())
                 .username(user.getUsername())
                 .displayName(user.getDisplayName())
-                .role(user.getRole() != null ? user.getRole() : "user")
-                .department(user.getDepartment() != null ? user.getDepartment() : "全公司")
+                .role(user.getRole() != null ? user.getRole() : defaultRole)
+                .department(user.getDepartment() != null ? user.getDepartment() : defaultDepartment)
                 .token(token)
                 .build();
 
@@ -71,8 +77,8 @@ public class AuthController {
                 .userId(user.getId())
                 .username(user.getUsername())
                 .displayName(user.getDisplayName())
-                .role(user.getRole() != null ? user.getRole() : "user")
-                .department(user.getDepartment() != null ? user.getDepartment() : "全公司")
+                .role(user.getRole() != null ? user.getRole() : defaultRole)
+                .department(user.getDepartment() != null ? user.getDepartment() : defaultDepartment)
                 .token(user.getAuthToken())
                 .build();
         return Result.success(resp);

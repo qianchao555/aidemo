@@ -43,8 +43,6 @@ public class KnowledgeBaseService {
 
     private static final Logger logger = LoggerFactory.getLogger(KnowledgeBaseService.class);
 
-    private static final int EMBEDDING_BATCH_SIZE = 25;
-
     private final VectorStore vectorStore;
     private final DocumentParserFactory parserFactory;
     private final KnowledgeDocumentMapper documentMapper;
@@ -53,6 +51,24 @@ public class KnowledgeBaseService {
     private final ChatModel chatModel;
     private final String schemaName;
     private final String vectorTableName;
+
+    @Value("${app.rag.embedding-batch-size:25}")
+    private int embeddingBatchSize;
+
+    @Value("${app.rag.rrf-k:60.0}")
+    private double rrfK;
+
+    @Value("${app.rag.quality.rrf-threshold:0.01}")
+    private double qualityRrfThreshold;
+
+    @Value("${app.rag.quality.llm-threshold:3}")
+    private int qualityLlmThreshold;
+
+    @Value("${app.rag.rerank-top-n:3}")
+    private int rerankTopN;
+
+    @Value("${app.rag.chunk-truncate-length:500}")
+    private int chunkTruncateLength;
 
     private final TokenTextSplitter textSplitter = TokenTextSplitter.builder()
             .build();
@@ -109,7 +125,7 @@ public class KnowledgeBaseService {
             group = DocumentGroup.builder()
                     .name(fileName)
                     .department(department)
-                    .status("active")
+                    .status(com.xiaofuzi.ai.util.AppConstants.STATUS_ACTIVE)
                     .build();
             documentGroupMapper.insert(group);
         }
@@ -127,7 +143,7 @@ public class KnowledgeBaseService {
                     .category(category)
                     .description(description)
                     .version(version)
-                    .status("active")
+                    .status(com.xiaofuzi.ai.util.AppConstants.STATUS_ACTIVE)
                     .department(department)
                     .groupId(group.getId())
                     .isLatest(true)
@@ -344,8 +360,8 @@ public class KnowledgeBaseService {
             return;
         }
 
-        for (int i = 0; i < documents.size(); i += EMBEDDING_BATCH_SIZE) {
-            int end = Math.min(i + EMBEDDING_BATCH_SIZE, documents.size());
+        for (int i = 0; i < documents.size(); i += embeddingBatchSize) {
+            int end = Math.min(i + embeddingBatchSize, documents.size());
             List<Document> batch = documents.subList(i, end);
             vectorStore.add(batch);
             logger.debug("向量入库批次: {}-{}/{}", i, end, documents.size());
@@ -444,8 +460,8 @@ public class KnowledgeBaseService {
 
         // 4. LLM 重排序：候选数 > 3 时，用 LLM 对每个 chunk 打分(1-5)，取 top 3
         int originalMergedCount = merged.size();
-        if (merged.size() > 3) {
-            merged = llmRerank(query, merged, 3);
+        if (merged.size() > rerankTopN) {
+            merged = llmRerank(query, merged, rerankTopN);
         }
 
         // 4.5 ★ 质量评分：在 LLM 重排序后、去重前评估检索结果质量
@@ -507,8 +523,8 @@ public class KnowledgeBaseService {
             double llm = parseMetaDouble(doc.getMetadata().get("llm_score"));
             double combined = llm * 10 + rrf * 100;
             if (combined > maxCombined) maxCombined = combined;
-            // LLM ≥ 3 分 且 RRF ≥ 0.01 → 有效召回
-            if (llm >= 3 && rrf >= 0.01) passCount++;
+            // LLM ≥ qualityLlmThreshold 且 RRF ≥ qualityRrfThreshold → 有效召回
+            if (llm >= qualityLlmThreshold && rrf >= qualityRrfThreshold) passCount++;
             rrfSum += rrf;
             llmSum += llm;
             count++;
@@ -672,7 +688,7 @@ public class KnowledgeBaseService {
      */
     private List<Document> rrfMerge(List<Document> vectorResults,
                                      List<Document> keywordResults, int topK) {
-        final double k = 60.0;
+        final double k = rrfK;
         Map<String, Document> docMap = new LinkedHashMap<>();
 
         // 登记向量检索排名（rank 从 1 开始）
@@ -713,8 +729,8 @@ public class KnowledgeBaseService {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < candidates.size(); i++) {
             String text = candidates.get(i).getText();
-            if (text.length() > 500) {
-                text = text.substring(0, 500) + "...";
+            if (text.length() > chunkTruncateLength) {
+                text = text.substring(0, chunkTruncateLength) + "...";
             }
             sb.append("[").append(i + 1).append("] ").append(text).append("\n\n");
         }

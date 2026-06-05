@@ -151,7 +151,7 @@ public class FaqController {
                     .answer(answer != null ? answer : "")
                     .category(getCellString(row.getCell(2)))
                     .keywords(getCellString(row.getCell(3)))
-                    .status("active")
+                    .status(com.xiaofuzi.ai.util.AppConstants.STATUS_ACTIVE)
                     .build();
                 entries.add(entry);
             }

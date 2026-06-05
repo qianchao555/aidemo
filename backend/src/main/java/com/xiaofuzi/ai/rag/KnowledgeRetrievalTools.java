@@ -32,6 +32,7 @@ public class KnowledgeRetrievalTools {
 
     /** ★ 最后一次检索的质量评分详情（ThreadLocal） */
     private static final ThreadLocal<QualityScore> lastQualityScore = new ThreadLocal<>();
+    private static final int AGENT_CONTEXT_MAX_LENGTH = 3000;
 
     private final KnowledgeBaseService knowledgeBaseService;
 
@@ -84,7 +85,7 @@ public class KnowledgeRetrievalTools {
         }
 
         // ★ 有效召回：正常格式化上下文
-        return knowledgeBaseService.formatAsContext(docs, 3000);
+        return knowledgeBaseService.formatAsContext(docs, AGENT_CONTEXT_MAX_LENGTH);
     }
 
     @SuppressWarnings("unchecked")
