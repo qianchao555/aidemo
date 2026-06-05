@@ -54,8 +54,8 @@ public class DataInitializer implements ApplicationRunner {
 
         // 2. 确保 admin 角色正确设置（不依赖 migration SQL）
         ChatUser admin = chatUserMapper.findByUsername(defaultAdmin);
-        if (admin != null && !"admin".equals(admin.getRole())) {
-            chatUserMapper.updateRole(admin.getId(), "admin");
+        if (admin != null && !com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN.equals(admin.getRole())) {
+            chatUserMapper.updateRole(admin.getId(), com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN);
             logger.info("已将 {} 的角色设置为 admin", defaultAdmin);
         }
 

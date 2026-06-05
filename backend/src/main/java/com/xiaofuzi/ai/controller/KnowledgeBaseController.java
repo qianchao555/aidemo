@@ -24,7 +24,7 @@ public class KnowledgeBaseController {
         this.knowledgeBaseService = knowledgeBaseService;
     }
 
-    @RequireRole("admin")
+    @RequireRole(com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN)
     @PostMapping("/upload")
     public Result<Map<String, Object>> uploadFile(
             @RequestParam("file") MultipartFile file,

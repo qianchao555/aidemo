@@ -24,6 +24,7 @@ import com.xiaofuzi.ai.entity.DocumentGroup;
 import com.xiaofuzi.ai.entity.KnowledgeDocument;
 import com.xiaofuzi.ai.mapper.DocumentGroupMapper;
 import com.xiaofuzi.ai.mapper.KnowledgeDocumentMapper;
+import com.xiaofuzi.ai.util.AppConstants;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.beans.factory.annotation.Qualifier;
 
@@ -69,6 +70,8 @@ public class KnowledgeBaseService {
 
     @Value("${app.rag.chunk-truncate-length:500}")
     private int chunkTruncateLength;
+
+    private static final String UNKNOWN_SOURCE = "未知来源";
 
     private final TokenTextSplitter textSplitter = TokenTextSplitter.builder()
             .build();
@@ -153,12 +156,12 @@ public class KnowledgeBaseService {
             Map<String, Object> sharedMeta = new HashMap<>();
             sharedMeta.put("source", fileName);
             sharedMeta.put("file_type", getFileExtension(fileName));
-            sharedMeta.put("document_id", doc.getId().toString());
-            sharedMeta.put("group_id", String.valueOf(group.getId()));
-            sharedMeta.put("version", version);
-            sharedMeta.put("is_latest", "true");
+            sharedMeta.put(AppConstants.META_DOCUMENT_ID, doc.getId().toString());
+            sharedMeta.put(AppConstants.META_GROUP_ID, String.valueOf(group.getId()));
+            sharedMeta.put(AppConstants.META_VERSION, version);
+            sharedMeta.put(AppConstants.META_IS_LATEST, "true");
             if (category != null && !category.isBlank()) {
-                sharedMeta.put("document_category", category);
+                sharedMeta.put(AppConstants.META_DOCUMENT_CATEGORY, category);
             }
             if (department != null && !department.isBlank()) {
                 sharedMeta.put("department", department);
@@ -190,7 +193,7 @@ public class KnowledgeBaseService {
             if (parsedDoc.getMetadata() != null) {
                 mergedMeta.putAll(parsedDoc.getMetadata());
             }
-            boolean skipSplit = Boolean.TRUE.equals(mergedMeta.get("skip_split"));
+            boolean skipSplit = Boolean.TRUE.equals(mergedMeta.get(AppConstants.META_SKIP_SPLIT));
             if (skipSplit) {
                 count += 1;
             } else {
@@ -210,8 +213,8 @@ public class KnowledgeBaseService {
                 mergedMeta.putAll(parsedDoc.getMetadata());
             }
 
-            boolean skipSplit = Boolean.TRUE.equals(mergedMeta.get("skip_split"));
-            mergedMeta.remove("skip_split");
+            boolean skipSplit = Boolean.TRUE.equals(mergedMeta.get(AppConstants.META_SKIP_SPLIT));
+            mergedMeta.remove(AppConstants.META_SKIP_SPLIT);
 
             Document enrichedDoc = new Document(parsedDoc.getText(), mergedMeta);
 
@@ -259,8 +262,8 @@ public class KnowledgeBaseService {
      * </ul>
      */
     private List<Document> chunkSmart(Document doc) {
-        String contentType = (String) doc.getMetadata().getOrDefault("content_type", "unknown");
-        String category = (String) doc.getMetadata().getOrDefault("document_category", "");
+        String contentType = (String) doc.getMetadata().getOrDefault(AppConstants.META_CONTENT_TYPE, com.xiaofuzi.ai.util.AppConstants.CONTENT_TYPE_UNKNOWN);
+        String category = (String) doc.getMetadata().getOrDefault(AppConstants.META_DOCUMENT_CATEGORY, "");
         String text = doc.getText();
 
         // 第一步：根据文档类别精确路由（只有 category 明确指定时）
@@ -279,8 +282,8 @@ public class KnowledgeBaseService {
         record Strategy(String name, java.util.function.BiFunction<String, String, List<Document>> fn, String marker) {}
         // @formatter:on
         Strategy[] strategies = {
-                new Strategy("HeadingChunker", HeadingChunker::chunk, "heading_path"),
-                new Strategy("ProcessChunker", ProcessChunker::chunk, "step_title"),
+                new Strategy("HeadingChunker", HeadingChunker::chunk, AppConstants.META_HEADING_PATH),
+                new Strategy("ProcessChunker", ProcessChunker::chunk, AppConstants.META_STEP_TITLE),
                 new Strategy("FaqChunker",     FaqChunker::chunk,     "qa_question"),
         };
 
@@ -312,7 +315,7 @@ public class KnowledgeBaseService {
         if (lower.contains("制度") || lower.contains("政策") || lower.contains("规范")
                 || lower.contains("手册") || lower.contains("条例") || lower.contains("policy")) {
             List<Document> chunks = HeadingChunker.chunk(text, contentType);
-            if (chunks.size() > 1 || (chunks.size() == 1 && nonBlankMeta(chunks.get(0), "heading_path"))) {
+            if (chunks.size() > 1 || (chunks.size() == 1 && nonBlankMeta(chunks.get(0), AppConstants.META_HEADING_PATH))) {
                 logger.info("切分策略(类别路由): 制度类 → HeadingChunker → {} chunk", chunks.size());
                 return chunks;
             }
@@ -325,7 +328,7 @@ public class KnowledgeBaseService {
         if (lower.contains("流程") || lower.contains("指引") || lower.contains("办理")
                 || lower.contains("审批") || lower.contains("process")) {
             List<Document> chunks = ProcessChunker.chunk(text, contentType);
-            if (chunks.size() > 1 || (chunks.size() == 1 && nonBlankMeta(chunks.get(0), "step_title"))) {
+            if (chunks.size() > 1 || (chunks.size() == 1 && nonBlankMeta(chunks.get(0), AppConstants.META_STEP_TITLE))) {
                 logger.info("切分策略(类别路由): 流程类 → ProcessChunker → {} chunk", chunks.size());
                 return chunks;
             }
@@ -490,7 +493,7 @@ public class KnowledgeBaseService {
     private List<Document> filterNonFaq(List<Document> docs) {
         return docs.stream()
                 .filter(d -> d.getMetadata() == null
-                        || !"faq_entry".equals(d.getMetadata().get("content_type")))
+                        || !AppConstants.CONTENT_TYPE_FAQ.equals(d.getMetadata().get(AppConstants.META_CONTENT_TYPE)))
                 .collect(Collectors.toList());
     }
 
@@ -555,8 +558,8 @@ public class KnowledgeBaseService {
             // 制度文档用 heading_path，流程文档用 step_title
             String structKey = "";
             if (doc.getMetadata() != null) {
-                String headingPath = (String) doc.getMetadata().get("heading_path");
-                String stepTitle = (String) doc.getMetadata().get("step_title");
+                String headingPath = (String) doc.getMetadata().get(AppConstants.META_HEADING_PATH);
+                String stepTitle = (String) doc.getMetadata().get(AppConstants.META_STEP_TITLE);
                 if (headingPath != null && !headingPath.isBlank()) {
                     structKey = headingPath;
                 } else if (stepTitle != null && !stepTitle.isBlank()) {
@@ -583,9 +586,9 @@ public class KnowledgeBaseService {
             String source = doc.getMetadata() != null
                     ? (String) doc.getMetadata().getOrDefault("source", "") : "";
             String headingPath = doc.getMetadata() != null
-                    ? (String) doc.getMetadata().get("heading_path") : null;
+                    ? (String) doc.getMetadata().get(AppConstants.META_HEADING_PATH) : null;
             String stepTitle = doc.getMetadata() != null
-                    ? (String) doc.getMetadata().get("step_title") : null;
+                    ? (String) doc.getMetadata().get(AppConstants.META_STEP_TITLE) : null;
             boolean hasStruct = (headingPath != null && !headingPath.isBlank())
                     || (stepTitle != null && !stepTitle.isBlank());
             if (!hasStruct) {
@@ -793,7 +796,7 @@ public class KnowledgeBaseService {
             Document doc = documents.get(i);
             Map<String, Object> meta = doc.getMetadata();
             String content = doc.getText();
-            String source = meta != null ? (String) meta.getOrDefault("source", "未知来源") : "未知来源";
+            String source = meta != null ? (String) meta.getOrDefault("source", UNKNOWN_SOURCE) : UNKNOWN_SOURCE;
 
             // 构建结构化参考头部：制度文档显示章节路径，流程文档显示步骤/角色/时限/材料
             StringBuilder header = new StringBuilder();
@@ -801,12 +804,12 @@ public class KnowledgeBaseService {
 
             if (meta != null) {
                 // 制度文档：章节路径
-                String headingPath = (String) meta.get("heading_path");
+                String headingPath = (String) meta.get(AppConstants.META_HEADING_PATH);
                 if (headingPath != null && !headingPath.isBlank()) {
                     header.append(" > ").append(headingPath);
                 }
                 // 流程文档：步骤标题
-                String stepTitle = (String) meta.get("step_title");
+                String stepTitle = (String) meta.get(AppConstants.META_STEP_TITLE);
                 if (stepTitle != null && !stepTitle.isBlank()) {
                     header.append(" | ").append(stepTitle);
                 }
@@ -897,9 +900,9 @@ public class KnowledgeBaseService {
             Map<String, Object> sharedMeta = new HashMap<>();
             sharedMeta.put("source", fileName);
             sharedMeta.put("file_type", getFileExtension(fileName));
-            sharedMeta.put("document_id", documentId.toString());
+            sharedMeta.put(AppConstants.META_DOCUMENT_ID, documentId.toString());
             if (category != null && !category.isBlank()) {
-                sharedMeta.put("document_category", category);
+                sharedMeta.put(AppConstants.META_DOCUMENT_CATEGORY, category);
             }
             int chunkCount = ingestParsedDocumentsCount(parsedDocs, sharedMeta, documentId);
 
@@ -919,8 +922,8 @@ public class KnowledgeBaseService {
             if (parsedDoc.getMetadata() != null) {
                 mergedMeta.putAll(parsedDoc.getMetadata());
             }
-            boolean skipSplit = Boolean.TRUE.equals(mergedMeta.get("skip_split"));
-            mergedMeta.remove("skip_split");
+            boolean skipSplit = Boolean.TRUE.equals(mergedMeta.get(AppConstants.META_SKIP_SPLIT));
+            mergedMeta.remove(AppConstants.META_SKIP_SPLIT);
             Document enrichedDoc = new Document(parsedDoc.getText(), mergedMeta);
             if (skipSplit) {
                 Map<String, Object> chunkMeta = new HashMap<>(mergedMeta);

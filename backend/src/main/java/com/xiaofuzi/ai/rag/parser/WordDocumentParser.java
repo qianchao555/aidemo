@@ -56,7 +56,7 @@ public class WordDocumentParser implements DocumentParser {
         String content = normalizeNewlines(result.toString());
         logger.info("Word 文档解析完成，内容长度: {} 字符", content.length());
 
-        Document doc = new Document(content, Map.of("content_type", "word_document"));
+        Document doc = new Document(content, Map.of("content_type", com.xiaofuzi.ai.util.AppConstants.CONTENT_TYPE_WORD));
         return List.of(doc);
     }
 

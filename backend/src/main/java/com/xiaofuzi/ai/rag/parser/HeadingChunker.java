@@ -38,8 +38,8 @@ public final class HeadingChunker {
         if (!hasHeadings) {
             // 无结构标记：空 heading_path 表示"未检测到"
             return List.of(new Document(text, Map.of(
-                    "content_type", contentType,
-                    "heading_path", "")));
+                    com.xiaofuzi.ai.util.AppConstants.META_CONTENT_TYPE, contentType,
+                    com.xiaofuzi.ai.util.AppConstants.META_HEADING_PATH, "")));
         }
 
         List<Document> chunks = new ArrayList<>();
@@ -67,8 +67,8 @@ public final class HeadingChunker {
                         : "[" + directTitle + "] " + aggregated;
 
                 Map<String, Object> meta = new LinkedHashMap<>();
-                meta.put("content_type", contentType);
-                meta.put("heading_path", fullPath);
+                meta.put(com.xiaofuzi.ai.util.AppConstants.META_CONTENT_TYPE, contentType);
+                meta.put(com.xiaofuzi.ai.util.AppConstants.META_HEADING_PATH, fullPath);
                 if (section.level > 0) {
                     meta.put("heading_title", directTitle);
                     meta.put("heading_level", section.level);

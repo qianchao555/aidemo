@@ -22,31 +22,31 @@ public class QualityController {
         this.qualityService = qualityService;
     }
 
-    @RequireRole("admin")
+    @RequireRole(com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN)
     @GetMapping("/overview")
     public Result<QualityOverview> getOverview() {
         return Result.success(qualityService.getOverview());
     }
 
-    @RequireRole("admin")
+    @RequireRole(com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN)
     @GetMapping("/trend")
     public Result<List<DailyRatingTrendItem>> getTrend(@RequestParam(defaultValue = "30") int days) {
         return Result.success(qualityService.getDailyRatingTrend(days));
     }
 
-    @RequireRole("admin")
+    @RequireRole(com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN)
     @GetMapping("/low-rated")
     public Result<List<LowRatedMessage>> getLowRated(@RequestParam(defaultValue = "20") int limit) {
         return Result.success(qualityService.getLowRatedMessages(limit));
     }
 
-    @RequireRole("admin")
+    @RequireRole(com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN)
     @GetMapping("/blind-spots")
     public Result<List<BlindSpotItem>> getBlindSpots(@RequestParam(defaultValue = "20") int limit) {
         return Result.success(qualityService.getBlindSpots(limit));
     }
 
-    @RequireRole("admin")
+    @RequireRole(com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN)
     @GetMapping("/department-stats")
     public Result<List<DepartmentQualityItem>> getDepartmentStats() {
         return Result.success(qualityService.getDepartmentStats());

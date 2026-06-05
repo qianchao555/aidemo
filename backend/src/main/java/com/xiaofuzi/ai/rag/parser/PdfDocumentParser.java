@@ -48,7 +48,7 @@ public class PdfDocumentParser implements DocumentParser {
         logger.info("PDF 解析完成 (纯文本输出，切分交由 chunkSmart 管线)，长度: {} 字符", markdown.length());
 
         // 不设 skip_split，让 KnowledgeBaseService.chunkSmart() 统一处理
-        return List.of(new Document(markdown, Map.of("content_type", "pdf_document")));
+        return List.of(new Document(markdown, Map.of("content_type", com.xiaofuzi.ai.util.AppConstants.CONTENT_TYPE_PDF)));
     }
 
     @Override

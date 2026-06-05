@@ -42,14 +42,14 @@ public class FaqController {
 
     /***********************************FAQ 管理 API*******************************/
 
-    @RequireRole("admin")
+    @RequireRole(com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN)
     @PostMapping("/create-faq")
     public Result<FaqEntry> createFaq(@RequestBody FaqEntry faqEntry) {
         faqService.create(faqEntry);
         return Result.success(faqEntry);
     }
 
-    @RequireRole("admin")
+    @RequireRole(com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN)
     @PutMapping("/faq/{id}")
     public Result<FaqEntry> updateFaq(@PathVariable Long id, @RequestBody FaqEntry faqEntry) {
         faqEntry.setId(id);
@@ -57,7 +57,7 @@ public class FaqController {
         return Result.success(faqEntry);
     }
 
-    @RequireRole("admin")
+    @RequireRole(com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN)
     @DeleteMapping("/faq/{id}")
     public Result<Map<String, Object>> deleteFaq(@PathVariable Long id) {
         faqService.delete(id);
@@ -103,14 +103,14 @@ public class FaqController {
         return Result.success(faqService.findSimilar(question));
     }
 
-    @RequireRole("admin")
+    @RequireRole(com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN)
     @PostMapping("/faq/batch-delete")
     public Result<Map<String, Object>> batchDelete(@RequestBody List<Long> ids) {
         faqService.batchDelete(ids);
         return Result.success(Map.of("success", true, "message", "批量删除完成", "count", ids.size()));
     }
 
-    @RequireRole("admin")
+    @RequireRole(com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN)
     @PostMapping("/faq/batch-update-category")
     public Result<Map<String, Object>> batchUpdateCategory(@RequestBody Map<String, Object> body) {
         @SuppressWarnings("unchecked")
@@ -121,7 +121,7 @@ public class FaqController {
         return Result.success(Map.of("success", true, "message", "批量更新分类完成", "count", ids.size()));
     }
 
-    @RequireRole("admin")
+    @RequireRole(com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN)
     @PostMapping("/faq/batch-update-status")
     public Result<Map<String, Object>> batchUpdateStatus(@RequestBody Map<String, Object> body) {
         @SuppressWarnings("unchecked")
@@ -132,7 +132,7 @@ public class FaqController {
         return Result.success(Map.of("success", true, "message", "批量更新状态完成", "count", ids.size()));
     }
 
-    @RequireRole("admin")
+    @RequireRole(com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN)
     @PostMapping("/faq/import")
     public Result<Map<String, Object>> importFaq(@RequestParam("file") MultipartFile file) {
         List<FaqEntry> entries = new ArrayList<>();
@@ -240,7 +240,7 @@ public class FaqController {
         return Result.success(list);
     }
 
-    @RequireRole("admin")
+    @RequireRole(com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN)
     @GetMapping("/faq/candidates")
     public Result<List<Map<String, Object>>> faqCandidates(
             @RequestParam(defaultValue = "20") int limit,

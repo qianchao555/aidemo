@@ -57,7 +57,7 @@ public class LoginInterceptor implements HandlerInterceptor {
         if (handler instanceof HandlerMethod hm) {
             RequireRole requireRole = hm.getMethodAnnotation(RequireRole.class);
             if (requireRole != null) {
-                String userRole = user.getRole() != null ? user.getRole() : "user";
+                String userRole = user.getRole() != null ? user.getRole() : com.xiaofuzi.ai.util.AppConstants.ROLE_USER;
                 boolean allowed = Arrays.asList(requireRole.value()).contains(userRole);
                 if (!allowed) {
                     writeJson(response, 403, "无权限");
