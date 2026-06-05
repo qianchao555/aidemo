@@ -448,6 +448,11 @@ public class KnowledgeBaseService {
             merged = llmRerank(query, merged, 3);
         }
 
+        // 4.5 ★ 质量评分：在 LLM 重排序后、去重前评估检索结果质量
+        QualityScore qualityScore = assessQuality(merged);
+        String qualityStatus = qualityScore.passed() ? "PASSED"
+                : (merged.isEmpty() ? "EMPTY" : "LOW_QUALITY");
+
         // 5. 去重：同文档同章节/同步骤的 chunk 只保留排名最高的那条
         merged = deduplicateByStructure(merged);
 
@@ -456,9 +461,12 @@ public class KnowledgeBaseService {
         result.put("vectorCount", vectorResults.size());
         result.put("keywordCount", keywordResults.size());
         result.put("mergedCount", originalMergedCount);
+        // ★ 新增质量字段
+        result.put("qualityStatus", qualityStatus);
+        result.put("qualityScore", qualityScore);
 
-        logger.info("混合检索: query='{}', 向量命中={}, 关键词命中={}, RRF融合={}, LLM重排后={}",
-                query, vectorResults.size(), keywordResults.size(), originalMergedCount, merged.size());
+        logger.info("混合检索: query='{}', 向量命中={}, 关键词命中={}, RRF融合={}, LLM重排后={}, 质量={}",
+                query, vectorResults.size(), keywordResults.size(), originalMergedCount, merged.size(), qualityStatus);
         return result;
     }
 
@@ -475,6 +483,53 @@ public class KnowledgeBaseService {
      * 去重 key = source 文档名 + heading_path（制度文档）或 step_title（流程文档）。
      * 无结构标记的 chunk 不做去重，保留全部。
      */
+    /**
+     * ★ 检索结果质量评分。
+     * 综合 RRF 融合分数和 LLM 重排序分数，判定是否存在有效召回。
+     *
+     * @param docs LLM 重排序后的文档列表（metadata 中已含 rrf_score 和 llm_score）
+     * @return QualityScore 评分结果，passCount >= 1 表示至少有一条有效召回
+     */
+    private QualityScore assessQuality(List<Document> docs) {
+        if (docs == null || docs.isEmpty()) {
+            return new QualityScore(0, 0, 0, 0);
+        }
+
+        int passCount = 0;
+        double maxCombined = 0;
+        double rrfSum = 0;
+        double llmSum = 0;
+        int count = 0;
+
+        for (Document doc : docs) {
+            if (doc.getMetadata() == null) continue;
+            double rrf = parseMetaDouble(doc.getMetadata().get("rrf_score"));
+            double llm = parseMetaDouble(doc.getMetadata().get("llm_score"));
+            double combined = llm * 10 + rrf * 100;
+            if (combined > maxCombined) maxCombined = combined;
+            // LLM ≥ 3 分 且 RRF ≥ 0.01 → 有效召回
+            if (llm >= 3 && rrf >= 0.01) passCount++;
+            rrfSum += rrf;
+            llmSum += llm;
+            count++;
+        }
+
+        double rrfAvg = count > 0 ? rrfSum / count : 0;
+        double llmAvg = count > 0 ? llmSum / count : 0;
+        return new QualityScore(maxCombined, rrfAvg, llmAvg, passCount);
+    }
+
+    /** 安全地将 metadata Object 转为 double，支持 String 和 Number 类型 */
+    private double parseMetaDouble(Object val) {
+        if (val == null) return 0;
+        if (val instanceof Number n) return n.doubleValue();
+        try {
+            return Double.parseDouble(val.toString());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
     private List<Document> deduplicateByStructure(List<Document> docs) {
         Map<String, Document> seen = new LinkedHashMap<>();
         for (Document doc : docs) {
@@ -694,6 +749,12 @@ public class KnowledgeBaseService {
                 int ib = candidates.indexOf(b) + 1;
                 return Double.compare(scores.getOrDefault(ib, 0.0), scores.getOrDefault(ia, 0.0));
             });
+
+            // ★ 将 LLM 评分写入 metadata，供 assessQuality 使用
+            for (int i = 0; i < reranked.size(); i++) {
+                int idx = candidates.indexOf(reranked.get(i)) + 1;
+                reranked.get(i).getMetadata().put("llm_score", scores.getOrDefault(idx, 0.0));
+            }
 
             logger.info("LLM 重排序完成: {}/{} 候选 → top {}", reranked.size(), candidates.size(), topN);
             return reranked.subList(0, Math.min(topN, reranked.size()));
