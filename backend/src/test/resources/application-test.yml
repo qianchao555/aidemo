@@ -1,0 +1,15 @@
+spring:
+  main:
+    allow-bean-definition-overriding: true
+  datasource:
+    driver-class-name: org.h2.Driver
+  ai:
+    dashscope:
+      api-key: test-key
+    openai:
+      api-key: test-key
+
+logging:
+  level:
+    root: WARN
+    com.xiaofuzi.ai: DEBUG
