@@ -328,14 +328,11 @@ async function handleSend() {
     try {
       const response = await ragQaChat({ userMessage: text, threadId, department: localStorage.getItem('selectedDepartment') || undefined })
       const msgs = chatStore.messages[threadId]
-      if (msgs) {
-        const msg = msgs.find(m => m.id === assistantMsgId)
-        if (msg) {
-          msg.content = response
-          msg.sources = extractSourcesFromText(response)
-          msg.suggestions = extractSuggestionsFromText(response)
-        }
+      const msg = msgs?.find(m => m.id === assistantMsgId)
+      if (msg) {
+        msg.content = response
       }
+      chatStore.finishMessage(threadId, assistantMsgId)
     } catch {
       ElMessage.error('对话请求失败，请重试')
       const msgs = chatStore.messages[threadId]
@@ -414,34 +411,6 @@ function handleStreamEvent(event: { type: string; content: unknown }, threadId: 
       ElMessage.error((event.content as string) || '流式输出异常')
       break
   }
-}
-
-function extractSourcesFromText(content: string): { document: string; clause?: string }[] {
-  const sources: { document: string; clause?: string }[] = []
-  const regex = /【出处】(.*?)(?:\n|$)/g
-  let match
-  while ((match = regex.exec(content)) !== null) {
-    const parts = match[1].split('>').map(s => s.trim())
-    sources.push({
-      document: parts[0] || match[1],
-      clause: parts[1] || undefined
-    })
-  }
-  return sources
-}
-
-function extractSuggestionsFromText(content: string): string[] {
-  const match = content.match(/💡\s*您可以继续问[：:]\s*\n?([\s\S]*?)$/)
-  if (!match) return []
-  const items: string[] = []
-  for (const line of match[1].trim().split('\n')) {
-    if (!line.trim()) continue
-    for (const part of line.split(/(?<=[？?])\s*-\s*/)) {
-      const cleaned = part.replace(/^[-\s•\d.、]+/, '').trim()
-      if (cleaned && cleaned.length <= 50) items.push(cleaned)
-    }
-  }
-  return items
 }
 
 async function rateMessage(msg: { id: string; rating?: number }, rating: number) {

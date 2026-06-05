@@ -69,7 +69,8 @@ async function handleLogin() {
       id: res.userId,
       username: res.username,
       displayName: res.displayName,
-      role: res.role
+      role: res.role,
+      department: res.department
     }))
     ElMessage.success('登录成功')
     router.push('/agent/chat')

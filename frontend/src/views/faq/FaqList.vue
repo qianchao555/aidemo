@@ -437,7 +437,7 @@ function handleExport() {
   if (selectedIds.value.length > 0) {
     const rows = store.faqList.filter(f => selectedIds.value.includes(f.id!))
     const csv = '问题,答案,分类,关键词\n' + rows.map(r =>
-      `"${(r.question||'').replace(/"/g,'""')}","${(r.answer||'').replace(/"/g,'""')}","${r.category||''}","${r.keywords||''}"`
+      `"${(r.question||'').replace(/"/g,'""').replace(/\n/g,' ')}","${(r.answer||'').replace(/"/g,'""').replace(/\n/g,' ')}","${r.category||''}","${r.keywords||''}"`
     ).join('\n')
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=UTF-8' })
     const url = URL.createObjectURL(blob)
