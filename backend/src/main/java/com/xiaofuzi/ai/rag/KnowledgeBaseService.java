@@ -19,7 +19,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.xiaofuzi.ai.entity.DocumentGroup;
 import com.xiaofuzi.ai.entity.KnowledgeDocument;
+import com.xiaofuzi.ai.mapper.DocumentGroupMapper;
 import com.xiaofuzi.ai.mapper.KnowledgeDocumentMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -45,6 +47,7 @@ public class KnowledgeBaseService {
     private final VectorStore vectorStore;
     private final DocumentParserFactory parserFactory;
     private final KnowledgeDocumentMapper documentMapper;
+    private final DocumentGroupMapper documentGroupMapper;
     private final JdbcTemplate vectorJdbcTemplate;
     private final ChatModel chatModel;
     private final String schemaName;
@@ -60,7 +63,8 @@ public class KnowledgeBaseService {
             @Qualifier("vectorJdbcTemplate") JdbcTemplate vectorJdbcTemplate,
             ChatModel chatModel,
             @Value("${spring.ai.vectorstore.pgvector.schema-name}") String schemaName,
-            @Value("${spring.ai.vectorstore.pgvector.table-name}") String vectorTableName) {
+            @Value("${spring.ai.vectorstore.pgvector.table-name}") String vectorTableName,
+            DocumentGroupMapper documentGroupMapper) {
         this.vectorStore = vectorStore;
         this.parserFactory = parserFactory;
         this.documentMapper = documentMapper;
@@ -68,6 +72,7 @@ public class KnowledgeBaseService {
         this.chatModel = chatModel;
         this.schemaName = schemaName;
         this.vectorTableName = vectorTableName;
+        this.documentGroupMapper = documentGroupMapper;
     }
 
     private String qualifiedTable() {
@@ -75,7 +80,7 @@ public class KnowledgeBaseService {
     }
 
     public void ingestMultipartFile(MultipartFile file, String parserCategory,
-            String category, String description, String department) {
+            String category, String description, String department, Long parentDocumentId) {
         String fileName = file.getOriginalFilename();
         if (fileName == null || fileName.isBlank()) {
             throw new IllegalArgumentException("文件名不能为空");
@@ -85,27 +90,55 @@ public class KnowledgeBaseService {
             throw new IllegalArgumentException("不支持的文件类型: " + fileName);
         }
 
-        KnowledgeDocument doc = KnowledgeDocument.builder()
-                .documentName(fileName)
-                .documentType(getFileExtension(fileName))
-                .fileSize(file.getSize())
-                .category(category)
-                .description(description)
-                .version("1.0")
-                .status("active")
-                .department(department)
-                .build();
-        documentMapper.insert(doc);
+        DocumentGroup group;
+        if (parentDocumentId != null) {
+            KnowledgeDocument parent = documentMapper.findById(parentDocumentId);
+            if (parent == null) {
+                throw new IllegalArgumentException("父文档不存在: " + parentDocumentId);
+            }
+            if (parent.getGroupId() == null) {
+                throw new IllegalArgumentException("父文档无关联文档组");
+            }
+            group = documentGroupMapper.findById(parent.getGroupId());
+            if (group == null) {
+                throw new IllegalArgumentException("文档组不存在");
+            }
+        } else {
+            group = DocumentGroup.builder()
+                    .name(fileName)
+                    .department(department)
+                    .status("active")
+                    .build();
+            documentGroupMapper.insert(group);
+        }
 
         try (InputStream is = file.getInputStream()) {
             DocumentParser parser = parserFactory.getParser(fileName, parserCategory);
             List<Document> parsedDocs = parser.parse(is);
 
+            String version = extractVersion(parsedDocs);
+
+            KnowledgeDocument doc = KnowledgeDocument.builder()
+                    .documentName(fileName)
+                    .documentType(getFileExtension(fileName))
+                    .fileSize(file.getSize())
+                    .category(category)
+                    .description(description)
+                    .version(version)
+                    .status("active")
+                    .department(department)
+                    .groupId(group.getId())
+                    .isLatest(true)
+                    .build();
+            documentMapper.insert(doc);
+
             Map<String, Object> sharedMeta = new HashMap<>();
             sharedMeta.put("source", fileName);
             sharedMeta.put("file_type", getFileExtension(fileName));
             sharedMeta.put("document_id", doc.getId().toString());
-            // 将前端传入的文档类别透传到切分层，用于精确路由切分策略
+            sharedMeta.put("group_id", String.valueOf(group.getId()));
+            sharedMeta.put("version", version);
+            sharedMeta.put("is_latest", "true");
             if (category != null && !category.isBlank()) {
                 sharedMeta.put("document_category", category);
             }
@@ -115,12 +148,19 @@ public class KnowledgeBaseService {
             ingestParsedDocuments(parsedDocs, sharedMeta, doc.getId());
 
             doc.setChunkCount(countChunksInLastIngest(parsedDocs, sharedMeta));
-            documentMapper.update(doc);
 
-            logger.info("文件上传导入完成: {}, docId={}, 共 {} 个解析单元, 解析器: {}",
-                    fileName, doc.getId(), parsedDocs.size(), parser.getClass().getSimpleName());
+            if (parentDocumentId != null) {
+                documentMapper.markNotLatestByGroup(group.getId());
+                doc.setIsLatest(true);
+            }
+
+            documentMapper.update(doc);
+            documentGroupMapper.updateLatestDocument(group.getId(), doc.getId());
+
+            logger.info("文件上传导入完成: {}, docId={}, groupId={}, version={}, 共 {} 个解析单元",
+                    fileName, doc.getId(), group.getId(), version, parsedDocs.size());
         } catch (Exception e) {
-            logger.error("解析上传文件失败: {}, docId={}", fileName, doc.getId(), e);
+            logger.error("解析上传文件失败: {}, docId 未知", fileName, e);
             throw new RuntimeException("文件解析失败: " + e.getMessage(), e);
         }
     }
