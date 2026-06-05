@@ -64,13 +64,12 @@
 
       <template v-else>
         <div class="message-list" ref="msgListRef">
-          <div
+          <template
             v-for="msg in chatStore.currentMessages"
             :key="msg.id"
-            class="message-row"
-            :class="msg.role"
           >
-            <div class="message-bubble" :class="msg.role">
+          <div class="message-row" :class="msg.role">
+            <div v-if="msg.content || msg.role === 'user'" class="message-bubble" :class="msg.role">
               <div class="message-content" v-html="renderContent(msg.content)" />
               <div v-if="msg.role === 'assistant'" class="message-actions">
                 <button class="action-btn" title="复制" @click="copyMessage(msg)">
@@ -146,9 +145,28 @@
               </div>
             </div>
           </div>
+          <!-- ★ 建议问题 Chips — 独立行，垂直排列在消息下方 -->
+          <div v-if="msg.role === 'assistant' && msg.suggestions?.length" class="suggestion-row">
+            <span class="suggestion-label">💡 您可以继续问：</span>
+            <div class="suggestion-chips">
+              <button
+                v-for="(q, qi) in msg.suggestions"
+                :key="qi"
+                class="suggestion-chip"
+                :disabled="sending"
+                @click="quickAsk(q)"
+              >{{ q }}</button>
+            </div>
+          </div>
+          </template>
           <div v-if="sending" class="message-row assistant">
-            <div class="message-bubble assistant typing">
-              <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            <div class="message-bubble assistant loading-bubble">
+              <div class="loading-indicator">
+                <span class="loading-dot"></span>
+                <span class="loading-dot"></span>
+                <span class="loading-dot"></span>
+              </div>
+              <span class="loading-text">思考中...</span>
             </div>
           </div>
         </div>
@@ -239,7 +257,7 @@ function renderContent(text: string): string {
   // ★ 同时去掉「💡 您可以继续问：」段落（改为 Chips 渲染，避免重复显示）
   const cleaned = text
     .replace(/【出处】.*?(\n|$)/g, '')
-    .replace(/---\n💡\s*您可以继续问：[\s\S]*$/g, '')  // ★ 移除建议问题段落
+    .replace(/\n?---?\n💡\s*您可以继续问[：:][\s\S]*$/g, '')  // ★ 移除建议问题段落
     .replace(/\n{3,}/g, '\n\n')
   return marked.parse(cleaned, { async: false }) as string
 }
@@ -314,6 +332,7 @@ async function handleSend() {
         if (msg) {
           msg.content = response
           msg.sources = extractSourcesFromText(response)
+          msg.suggestions = extractSuggestionsFromText(response)
         }
       }
     } catch {
@@ -333,7 +352,7 @@ async function handleSend() {
 function handleStreamEvent(event: { type: string; content: unknown }, threadId: string, msgId: string) {
   switch (event.type) {
     case 'thinking':
-      chatStore.appendContent(threadId, msgId, '⏳ 正在检索知识库...\n\n')
+      // 静默忽略，不显示检索提示文字
       scrollToBottom()
       break
     case 'token':
@@ -345,7 +364,12 @@ function handleStreamEvent(event: { type: string; content: unknown }, threadId: 
       break
     case 'done': {
       chatStore.finishMessage(threadId, msgId)
-      const doneInfo = event.content as { threadId?: string; userMsgId?: number; assistantMsgId?: number }
+      const doneInfo = event.content as { threadId?: string; userMsgId?: number; assistantMsgId?: number; suggestions?: string[] }
+      if (doneInfo.suggestions?.length) {
+        const msgs = chatStore.messages[threadId]
+        const msg = msgs?.find(m => m.id === msgId)
+        if (msg) msg.suggestions = doneInfo.suggestions
+      }
       if (doneInfo.assistantMsgId) {
         chatStore.updateMessageId(threadId, msgId, String(doneInfo.assistantMsgId))
       }
@@ -403,6 +427,20 @@ function extractSourcesFromText(content: string): { document: string; clause?: s
     })
   }
   return sources
+}
+
+function extractSuggestionsFromText(content: string): string[] {
+  const match = content.match(/💡\s*您可以继续问[：:]\s*\n?([\s\S]*?)$/)
+  if (!match) return []
+  const items: string[] = []
+  for (const line of match[1].trim().split('\n')) {
+    if (!line.trim()) continue
+    for (const part of line.split(/(?<=[？?])\s*-\s*/)) {
+      const cleaned = part.replace(/^[-\s•\d.、]+/, '').trim()
+      if (cleaned && cleaned.length <= 50) items.push(cleaned)
+    }
+  }
+  return items
 }
 
 async function rateMessage(msg: { id: string; rating?: number }, rating: number) {
@@ -1020,21 +1058,40 @@ onMounted(async () => {
   font-weight: 400;
 }
 
-/* Typing animation */
-.typing .dot {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--text-muted);
-  margin: 0 2px;
-  animation: bounce 1.4s infinite both;
+/* Loading bubble */
+.loading-bubble {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  min-width: 120px;
 }
-.typing .dot:nth-child(2) { animation-delay: 0.2s; }
-.typing .dot:nth-child(3) { animation-delay: 0.4s; }
-@keyframes bounce {
-  0%, 80%, 100% { transform: scale(0); }
-  40% { transform: scale(1); }
+
+.loading-indicator {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.loading-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary);
+  animation: dotPulse 1.4s infinite both;
+}
+.loading-dot:nth-child(2) { animation-delay: 0.2s; }
+.loading-dot:nth-child(3) { animation-delay: 0.4s; }
+
+.loading-text {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+@keyframes dotPulse {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1); }
 }
 
 /* ===== Input Area ===== */
@@ -1151,14 +1208,24 @@ onMounted(async () => {
 .version-option:hover { background: var(--surface-warm); }
 .version-option.active { color: var(--primary); font-weight: 600; }
 
-/* ★ 建议问题 Chips */
+/* ★ 建议问题 — 独立行，在消息下方垂直排列 */
+.suggestion-row {
+  margin-bottom: 20px;
+  padding-left: 0;
+}
+
+.suggestion-label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
 .suggestion-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border-light);
 }
 
 .suggestion-chip {
