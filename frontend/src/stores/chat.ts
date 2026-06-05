@@ -63,6 +63,16 @@ export const useChatStore = defineStore('chat', () => {
     return sources
   }
 
+  /** ★ 从回答内容中解析「💡 您可以继续问：」段落的建议问题列表 */
+  function extractSuggestions(content: string): string[] {
+    const match = content.match(/💡\s*您可以继续问：\s*\n([\s\S]*?)$/)
+    if (!match) return []
+    const lines = match[1].trim().split('\n')
+    return lines
+      .map(l => l.replace(/^-\s*/, '').trim())
+      .filter(l => l.length > 0 && l.length <= 50)
+  }
+
   async function createSession(): Promise<string> {
     const threadId = crypto.randomUUID()
     const localSession: SessionSummary = {
@@ -149,6 +159,7 @@ export const useChatStore = defineStore('chat', () => {
     const msg = msgs.find(m => m.id === msgId)
     if (msg) {
       msg.sources = extractSources(msg.content)
+      msg.suggestions = extractSuggestions(msg.content)  // ★ 解析建议问题
     }
     saveMessagesCache()
   }

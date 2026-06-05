@@ -236,7 +236,11 @@ function relativeTime(dateStr: string): string {
 
 function renderContent(text: string): string {
   // 去掉答案中的 【出处】... 标记（已在引用气泡中展示）
-  const cleaned = text.replace(/【出处】.*?(\n|$)/g, '').replace(/\n{3,}/g, '\n\n')
+  // ★ 同时去掉「💡 您可以继续问：」段落（改为 Chips 渲染，避免重复显示）
+  const cleaned = text
+    .replace(/【出处】.*?(\n|$)/g, '')
+    .replace(/---\n💡\s*您可以继续问：[\s\S]*$/g, '')  // ★ 移除建议问题段落
+    .replace(/\n{3,}/g, '\n\n')
   return marked.parse(cleaned, { async: false }) as string
 }
 
@@ -521,6 +525,13 @@ async function switchSourceVersion(src: MessageSource, version: string, msgId: s
     sending.value = false
     scrollToBottom()
   }
+}
+
+/** ★ 点击建议问题 → 自动填入输入框并发送 */
+function quickAsk(question: string) {
+  if (sending.value) return
+  inputText.value = question
+  handleSend()
 }
 
 function newChat() {
@@ -1139,4 +1150,36 @@ onMounted(async () => {
 }
 .version-option:hover { background: var(--surface-warm); }
 .version-option.active { color: var(--primary); font-weight: 600; }
+
+/* ★ 建议问题 Chips */
+.suggestion-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-light);
+}
+
+.suggestion-chip {
+  padding: 6px 14px;
+  font-size: 12px;
+  color: #4338CA;
+  background: #EEF2FF;
+  border: 1px solid #C7D2FE;
+  border-radius: 20px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.suggestion-chip:hover:not(:disabled) {
+  background: #E0E7FF;
+  border-color: #A5B4FC;
+}
+
+.suggestion-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 </style>

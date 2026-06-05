@@ -79,6 +79,7 @@ export interface ChatMessage {
   timestamp: number
   sources?: MessageSource[]
   rating?: number
+  suggestions?: string[]  // ★ 建议问题列表，从回答末尾的「💡 您可以继续问」段落解析
 }
 
 /** 聊天会话 */
