@@ -22,6 +22,8 @@ public class KnowledgeDocument {
     private String category;
     private String department;
     private String version;
+    private Long groupId;
+    private Boolean isLatest;
     private LocalDate effectiveDate;
     private String description;
     private Integer chunkCount;

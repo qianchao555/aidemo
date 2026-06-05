@@ -1,10 +1,11 @@
 import { get, post, del } from './request'
-import type { SessionSummary, ChatHistoryDto, ChatUser, LoginRequest, LoginResponse } from '@/types'
+import type { SessionSummary, ChatHistoryDto, ChatUser, LoginRequest, LoginResponse, VersionOverride } from '@/types'
 
 export interface ChatParams {
   userMessage: string
   threadId?: string
   department?: string
+  versionOverrides?: VersionOverride[]
 }
 
 function getToken(): string {

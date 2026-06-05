@@ -55,4 +55,99 @@
         ORDER BY cnt DESC
     </select>
 
+    <!-- ========== 质量监控聚合查询 ========== -->
+
+    <select id="getRatingDistribution" resultType="java.util.HashMap">
+        SELECT
+            COUNT(*) AS total_assistant,
+            COALESCE(COUNT(CASE WHEN rating = 1 THEN 1 END), 0) AS thumbs_up,
+            COALESCE(COUNT(CASE WHEN rating = -1 THEN 1 END), 0) AS thumbs_down,
+            COALESCE(COUNT(CASE WHEN rating IS NULL THEN 1 END), 0) AS unrated,
+            ROUND(100.0 * COALESCE(COUNT(CASE WHEN rating = 1 THEN 1 END), 0)
+                / NULLIF(COUNT(CASE WHEN rating IN (1, -1) THEN 1 END), 0), 1) AS satisfaction_rate
+        FROM chat_history
+        WHERE role = 'assistant'
+    </select>
+
+    <select id="dailyRatingTrend" resultType="java.util.HashMap">
+        SELECT
+            TO_CHAR(d.date, 'YYYY-MM-DD') AS day,
+            COALESCE(SUM(CASE WHEN ch.rating = 1 THEN 1 ELSE 0 END), 0) AS thumbs_up,
+            COALESCE(SUM(CASE WHEN ch.rating = -1 THEN 1 ELSE 0 END), 0) AS thumbs_down,
+            COALESCE(SUM(CASE WHEN ch.rating IS NULL THEN 1 ELSE 0 END), 0) AS unrated,
+            ROUND(100.0 * COALESCE(SUM(CASE WHEN ch.rating = 1 THEN 1 ELSE 0 END), 0)
+                / NULLIF(SUM(CASE WHEN ch.rating IN (1, -1) THEN 1 ELSE 0 END), 0), 1) AS satisfaction_rate
+        FROM generate_series(CURRENT_DATE - (#{days} - 1), CURRENT_DATE, '1 day'::interval) d(date)
+        LEFT JOIN chat_history ch ON DATE(ch.create_time) = d.date AND ch.role = 'assistant'
+        GROUP BY d.date
+        ORDER BY d.date
+    </select>
+
+    <select id="findLowRatedMessages" resultType="java.util.HashMap">
+        WITH paired AS (
+            SELECT
+                id,
+                thread_id,
+                role,
+                content,
+                source_doc,
+                heading_path,
+                create_time,
+                rating,
+                LAG(role) OVER (PARTITION BY thread_id ORDER BY create_time ASC) AS prev_role,
+                LAG(content) OVER (PARTITION BY thread_id ORDER BY create_time ASC) AS prev_content
+            FROM chat_history
+        )
+        SELECT
+            p.id,
+            p.thread_id AS thread_id,
+            p.prev_content AS user_question,
+            LEFT(p.content, 200) AS assistant_answer_excerpt,
+            p.content AS assistant_answer_full,
+            p.source_doc AS source_doc,
+            p.heading_path AS heading_path,
+            p.create_time AS create_time,
+            p.rating
+        FROM paired p
+        WHERE p.role = 'assistant'
+          AND p.rating = -1
+          AND p.prev_role = 'user'
+        ORDER BY p.create_time DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="findBlindSpots" resultType="java.util.HashMap">
+        SELECT
+            source_doc,
+            heading_path,
+            COUNT(*) AS negative_count,
+            MAX(create_time) AS last_occurrence
+        FROM chat_history
+        WHERE role = 'assistant'
+          AND rating = -1
+          AND source_doc IS NOT NULL
+          AND source_doc != ''
+        GROUP BY source_doc, heading_path
+        ORDER BY negative_count DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="departmentRatingStats" resultType="java.util.HashMap">
+        SELECT
+            cu.department,
+            COUNT(*) AS total_rated,
+            COALESCE(COUNT(CASE WHEN ch.rating = 1 THEN 1 END), 0) AS thumbs_up,
+            COALESCE(COUNT(CASE WHEN ch.rating = -1 THEN 1 END), 0) AS thumbs_down,
+            ROUND(100.0 * COALESCE(COUNT(CASE WHEN ch.rating = 1 THEN 1 END), 0)
+                / NULLIF(COUNT(CASE WHEN ch.rating IN (1, -1) THEN 1 END), 0), 1) AS satisfaction_rate
+        FROM chat_history ch
+        JOIN chat_session cs ON ch.thread_id = cs.thread_id
+        JOIN chat_user cu ON cs.user_id = cu.id
+        WHERE ch.role = 'assistant'
+          AND cu.department IS NOT NULL
+          AND cu.department != ''
+        GROUP BY cu.department
+        ORDER BY total_rated DESC
+    </select>
+
 </mapper>

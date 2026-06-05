@@ -128,6 +128,15 @@ public class KnowledgeDocumentController {
     }
 
     /**
+     * 获取某文档组下的所有版本（含已归档），按创建时间倒序。
+     */
+    @GetMapping("/group/{groupId}")
+    public Result<List<KnowledgeDocument>> getGroupDocuments(@PathVariable Long groupId) {
+        List<KnowledgeDocument> docs = documentMapper.findByGroupId(groupId);
+        return Result.success(docs);
+    }
+
+    /**
      * 删除文档：按 document_id 删全部向量 + 软删除元信息记录。
      */
     @RequireRole("admin")

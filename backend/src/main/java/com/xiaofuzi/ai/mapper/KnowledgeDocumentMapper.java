@@ -41,4 +41,8 @@ public interface KnowledgeDocumentMapper {
     long sumChunks();
 
     List<Map<String, Object>> countByCategory();
+
+    List<KnowledgeDocument> findByGroupId(@Param("groupId") Long groupId);
+
+    void markNotLatestByGroup(@Param("groupId") Long groupId);
 }

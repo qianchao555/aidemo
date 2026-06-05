@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xiaofuzi.ai.context.DepartmentContextHolder;
 import com.xiaofuzi.ai.context.UserContext;
 import com.xiaofuzi.ai.dto.ContentChatRequest;
+import com.xiaofuzi.ai.dto.VersionOverride;
 import com.xiaofuzi.ai.dto.SessionSummary;
 import com.xiaofuzi.ai.entity.ChatHistory;
 import com.xiaofuzi.ai.entity.ChatSession;
@@ -25,12 +26,24 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @RestController
 @RequestMapping("/agent")
 public class AgentController {
 
     private static final Logger logger = LoggerFactory.getLogger(AgentController.class);
+
+    private static final Pattern SUGGESTIONS_EXTRACT_PATTERN =
+            Pattern.compile("💡\\s*您可以继续问[：:]\\s*\\n?([\\s\\S]*?)$");
+    private static final Pattern SUGGESTIONS_STRIP_WITH_SEP =
+            Pattern.compile("\\n?-*+\\n💡\\s*您可以继续问[：:][\\s\\S]*$");
+    private static final Pattern SUGGESTIONS_STRIP_WITHOUT_SEP =
+            Pattern.compile("\\n💡\\s*您可以继续问[：:][\\s\\S]*$");
+    private static final Pattern SUGGESTIONS_STRIP_NO_NEWLINE =
+            Pattern.compile("💡\\s*您可以继续问[：:][\\s\\S]*$");
 
     private final RagQaAgentService ragQaAgentService;
     private final ChatHistoryMapper chatHistoryMapper;
@@ -57,8 +70,8 @@ public class AgentController {
         Long userId = UserContext.get().getId();
         DepartmentContextHolder.set(contentChatRequest.getDepartment());
         try {
-            String response = ragQaAgentService.ask(threadId, userId, message);
-            return Result.success(response);
+            RagQaAgentService.AskResult result = ragQaAgentService.ask(threadId, userId, message);
+            return Result.success(result.response());
         } finally {
             DepartmentContextHolder.clear();
         }
@@ -78,13 +91,27 @@ public class AgentController {
 
         sseExecutor.execute(() -> {
             DepartmentContextHolder.set(request.getDepartment());
+            // Parse version overrides from request
+            List<VersionOverride> versionOverrides = null;
+            if (request.getVersionOverrides() != null && !request.getVersionOverrides().isEmpty()) {
+                versionOverrides = request.getVersionOverrides().stream()
+                        .map(m -> new VersionOverride(
+                                String.valueOf(m.get("group_id")),
+                                (String) m.get("version")))
+                        .collect(Collectors.toList());
+            }
             try {
                 // 使用 ObjectMapper 显式序列化为 JSON，避免 SseEmitter 内部 toString() 问题
                 String thinkingJson = objectMapper.writeValueAsString(
                         Map.of("type", "thinking", "content", "正在检索知识库..."));
                 emitter.send(SseEmitter.event().name("thinking").data(thinkingJson));
 
-                String response = ragQaAgentService.ask(finalThreadId, finalUserId, userMessage);
+                RagQaAgentService.AskResult result = ragQaAgentService.ask(finalThreadId, finalUserId, userMessage);
+                String response = result.response();
+
+                // 剥离建议问题段落，后续通过 done 事件结构化传递
+                List<String> suggestions = extractSuggestions(response);
+                String cleanResponse = suggestions.isEmpty() ? response : stripSuggestions(response);
 
                 // 推送检索元信息给前端展示
                 Map<String, Object> searchInfo = ragQaMessageHook.getLastSearchInfo();
@@ -94,8 +121,17 @@ public class AgentController {
                     emitter.send(SseEmitter.event().name("search_info").data(searchJson));
                 }
 
+                // 推送版本追溯信息给前端
+                List<Map<String, Object>> versionInfo = ragQaAgentService.buildVersionInfo(
+                        userMessage, request.getDepartment(), versionOverrides);
+                if (!versionInfo.isEmpty()) {
+                    String versionJson = objectMapper.writeValueAsString(
+                            Map.of("type", "version_info", "content", Map.of("items", versionInfo)));
+                    emitter.send(SseEmitter.event().name("version_info").data(versionJson));
+                }
+
                 // 按句拆分逐句发送
-                String[] segments = response.split("(?<=[。！？\\n])");
+                String[] segments = cleanResponse.split("(?<=[。！？\\n])");
                 for (String segment : segments) {
                     if (segment.trim().isEmpty()) continue;
                     Thread.sleep(30);
@@ -105,7 +141,11 @@ public class AgentController {
                 }
 
                 String doneJson = objectMapper.writeValueAsString(
-                        Map.of("type", "done", "content", finalThreadId));
+                        Map.of("type", "done", "content",
+                                Map.of("threadId", finalThreadId,
+                                       "userMsgId", result.userMsgId(),
+                                       "assistantMsgId", result.assistantMsgId(),
+                                       "suggestions", suggestions)));
                 emitter.send(SseEmitter.event().name("done").data(doneJson));
                 emitter.complete();
             } catch (Exception e) {
@@ -197,5 +237,42 @@ public class AgentController {
         chatSessionMapper.deleteByThreadId(threadId);
         logger.info("会话已删除: threadId={}", threadId);
         return Result.success(Map.of("success", true, "message", "会话已删除"));
+    }
+
+    /**
+     * 从回答文本中提取「💡 您可以继续问：」段落的建议问题列表。
+     * 支持多条建议在同一行（用 ？- 分隔）或分行。
+     */
+    private List<String> extractSuggestions(String content) {
+        if (content == null || content.isBlank()) return List.of();
+        Matcher m = SUGGESTIONS_EXTRACT_PATTERN.matcher(content);
+        if (!m.find()) return List.of();
+
+        String raw = m.group(1).trim();
+        List<String> items = new ArrayList<>();
+        for (String line : raw.split("\n")) {
+            line = line.trim();
+            if (line.isEmpty()) continue;
+            // 同一行内按 ？- 或 ?- 拆分
+            String[] parts = line.split("(?<=[？?])\\s*-\\s*");
+            for (String part : parts) {
+                part = part.replaceAll("^[-\\s•\\d.、]+", "").trim();
+                if (!part.isEmpty() && part.length() <= 50) {
+                    items.add(part);
+                }
+            }
+        }
+        return items;
+    }
+
+    /**
+     * 从回答文本中移除「💡 您可以继续问：」段落（含可选的前置 --- 分隔线）。
+     */
+    private String stripSuggestions(String content) {
+        if (content == null || content.isBlank()) return content;
+        String stripped = SUGGESTIONS_STRIP_WITH_SEP.matcher(content).replaceAll("");
+        stripped = SUGGESTIONS_STRIP_WITHOUT_SEP.matcher(stripped).replaceAll("");
+        stripped = SUGGESTIONS_STRIP_NO_NEWLINE.matcher(stripped).replaceAll("");
+        return stripped;
     }
 }

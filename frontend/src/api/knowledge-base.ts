@@ -7,13 +7,14 @@ export const ingestText = (data: IngestRequest) =>
 export const ingestFile = (data: IngestFileRequest) =>
   post<{ success: boolean; message: string; filePath: string }>('/knowledge-base/ingest-file', data)
 
-export const uploadFile = (file: File, parserCategory?: string, category?: string, description?: string, department?: string) => {
+export const uploadFile = (file: File, parserCategory?: string, category?: string, description?: string, department?: string, parentDocumentId?: number) => {
   const fd = new FormData()
   fd.append('file', file)
   if (parserCategory) fd.append('parserCategory', parserCategory)
   if (category) fd.append('category', category)
   if (description) fd.append('description', description)
   if (department) fd.append('department', department)
+  if (parentDocumentId) fd.append('parentDocumentId', String(parentDocumentId))
   return post<{ success: boolean; message: string }>('/knowledge-base/upload', fd)
 }
 
@@ -61,3 +62,7 @@ export const reingestDocument = (id: number, file: File) => {
 /** 删除文档（含向量） */
 export const deleteDocument = (id: number) =>
   del<{ success: boolean; message: string }>('/knowledge-base/documents/' + id)
+
+/** 获取某文档组的版本历史 */
+export const getGroupVersions = (groupId: number) =>
+  get<KnowledgeDocument[]>('/knowledge-base/documents/group/' + groupId)

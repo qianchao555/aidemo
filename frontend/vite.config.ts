@@ -29,6 +29,14 @@ export default defineConfig({
         }
       },
       '/knowledge-base': 'http://localhost:18989',
+      '/quality': {
+        target: 'http://localhost:18989',
+        bypass(req) {
+          if (req.url && !/^\/quality\/(overview|trend|low-rated|blind-spots|department-stats)/.test(req.url)) {
+            return '/index.html'
+          }
+        }
+      },
       '/user': 'http://localhost:18989',
       '/auth': 'http://localhost:18989'
     }

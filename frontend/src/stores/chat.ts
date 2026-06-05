@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { ChatMessage, ChatHistoryDto, SessionSummary, MessageSource } from '@/types'
+import type { ChatMessage, ChatHistoryDto, SessionSummary, MessageSource, VersionInfoItem } from '@/types'
 import { createSessionApi, listSessions, getSessionHistory, deleteSessionApi } from '@/api/agent'
 
 export const useChatStore = defineStore('chat', () => {
@@ -8,6 +8,9 @@ export const useChatStore = defineStore('chat', () => {
   const currentThreadId = ref<string>('')
   const messages = ref<Record<string, ChatMessage[]>>({})
   const loadingSessions = ref(false)
+
+  /** 每个消息对应的版本信息 */
+  const versionInfoMap = ref<Record<string, VersionInfoItem[]>>({})
 
   async function fetchSessions() {
     loadingSessions.value = true
@@ -36,8 +39,9 @@ export const useChatStore = defineStore('chat', () => {
           role: h.role,
           content: h.content,
           timestamp: new Date(h.createTime).getTime(),
-          sources: extractSources(h.content),
-          rating: h.rating
+          sources: h.role === 'assistant' ? extractSources(h.content) : undefined,
+          rating: h.rating,
+          suggestions: h.role === 'assistant' ? extractSuggestions(h.content) : undefined
         }))
       } catch {
         messages.value[threadId] = []
@@ -58,6 +62,22 @@ export const useChatStore = defineStore('chat', () => {
       })
     }
     return sources
+  }
+
+  /** ★ 从回答内容中解析「💡 您可以继续问：」段落的建议问题列表 */
+  function extractSuggestions(content: string): string[] {
+    const match = content.match(/💡\s*您可以继续问[：:]\s*\n?([\s\S]*?)$/)
+    if (!match) return []
+    const items: string[] = []
+    for (const line of match[1].trim().split('\n')) {
+      if (!line.trim()) continue
+      // 同一行内按 ？- 或 ?- 拆分（覆盖 LLM 挤在一行的情况）
+      for (const part of line.split(/(?<=[？?])\s*-\s*/)) {
+        const cleaned = part.replace(/^[-\s•\d.、]+/, '').trim()
+        if (cleaned && cleaned.length <= 50) items.push(cleaned)
+      }
+    }
+    return items
   }
 
   async function createSession(): Promise<string> {
@@ -146,6 +166,17 @@ export const useChatStore = defineStore('chat', () => {
     const msg = msgs.find(m => m.id === msgId)
     if (msg) {
       msg.sources = extractSources(msg.content)
+      msg.suggestions = extractSuggestions(msg.content)  // ★ 解析建议问题
+    }
+    saveMessagesCache()
+  }
+
+  function updateMessageId(threadId: string, oldId: string, newId: string) {
+    const msgs = messages.value[threadId]
+    if (!msgs) return
+    const msg = msgs.find(m => m.id === oldId)
+    if (msg) {
+      msg.id = newId
     }
     saveMessagesCache()
   }
@@ -156,7 +187,13 @@ export const useChatStore = defineStore('chat', () => {
     const msg = msgs.find(m => m.id === msgId)
     if (msg) {
       if (!msg.sources) msg.sources = []
-      msg.sources.push(source)
+      msg.sources.push({
+        document: source.document,
+        clause: source.clause,
+        version: source.version,
+        group_id: source.group_id,
+        has_history: source.has_history
+      })
     }
   }
 
@@ -176,9 +213,9 @@ export const useChatStore = defineStore('chat', () => {
   const hasCurrentSession = computed(() => !!currentThreadId.value)
 
   return {
-    sessions, currentThreadId, messages, loadingSessions,
+    sessions, currentThreadId, messages, loadingSessions, versionInfoMap,
     currentMessages, hasCurrentSession,
     fetchSessions, createSession, switchSession, deleteSession,
-    addMessage, appendContent, finishMessage, addSource
+    addMessage, appendContent, finishMessage, addSource, updateMessageId
   }
 })

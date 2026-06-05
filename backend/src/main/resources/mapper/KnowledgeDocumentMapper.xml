@@ -12,6 +12,8 @@
         <result property="category" column="category"/>
         <result property="department" column="department"/>
         <result property="version" column="version"/>
+        <result property="groupId" column="group_id"/>
+        <result property="isLatest" column="is_latest"/>
         <result property="effectiveDate" column="effective_date"/>
         <result property="description" column="description"/>
         <result property="chunkCount" column="chunk_count"/>
@@ -23,10 +25,12 @@
     <insert id="insert" parameterType="com.xiaofuzi.ai.entity.KnowledgeDocument"
             useGeneratedKeys="true" keyProperty="id">
         INSERT INTO knowledge_document (document_name, document_type, file_path, file_size,
-            category, department, version, effective_date, description, chunk_count, status, create_time, update_time)
+            category, department, version, effective_date, description, chunk_count,
+            group_id, is_latest, status, create_time, update_time)
         VALUES (#{documentName}, #{documentType}, #{filePath}, #{fileSize},
             #{category}, #{department}, #{version}, #{effectiveDate}, #{description},
-            COALESCE(#{chunkCount}, 0), COALESCE(#{status}, 'active'), NOW(), NOW())
+            COALESCE(#{chunkCount}, 0), #{groupId},
+            COALESCE(#{isLatest}, TRUE), COALESCE(#{status}, 'active'), NOW(), NOW())
     </insert>
 
     <select id="findById" resultMap="KnowledgeDocumentResult">
@@ -99,6 +103,8 @@
             category      = #{category},
             department    = #{department},
             version       = #{version},
+            group_id      = #{groupId},
+            is_latest     = #{isLatest},
             effective_date = #{effectiveDate},
             description   = #{description},
             chunk_count   = #{chunkCount},
@@ -125,5 +131,14 @@
         GROUP BY category
         ORDER BY cnt DESC
     </select>
+
+    <select id="findByGroupId" resultMap="KnowledgeDocumentResult">
+        SELECT * FROM knowledge_document WHERE group_id = #{groupId} ORDER BY create_time DESC
+    </select>
+
+    <update id="markNotLatestByGroup">
+        UPDATE knowledge_document SET is_latest = FALSE, status = 'archived', update_time = NOW()
+        WHERE group_id = #{groupId} AND is_latest = TRUE
+    </update>
 
 </mapper>

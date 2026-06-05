@@ -19,7 +19,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.xiaofuzi.ai.dto.VersionOverride;
+import com.xiaofuzi.ai.entity.DocumentGroup;
 import com.xiaofuzi.ai.entity.KnowledgeDocument;
+import com.xiaofuzi.ai.mapper.DocumentGroupMapper;
 import com.xiaofuzi.ai.mapper.KnowledgeDocumentMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -45,6 +48,7 @@ public class KnowledgeBaseService {
     private final VectorStore vectorStore;
     private final DocumentParserFactory parserFactory;
     private final KnowledgeDocumentMapper documentMapper;
+    private final DocumentGroupMapper documentGroupMapper;
     private final JdbcTemplate vectorJdbcTemplate;
     private final ChatModel chatModel;
     private final String schemaName;
@@ -60,7 +64,8 @@ public class KnowledgeBaseService {
             @Qualifier("vectorJdbcTemplate") JdbcTemplate vectorJdbcTemplate,
             ChatModel chatModel,
             @Value("${spring.ai.vectorstore.pgvector.schema-name}") String schemaName,
-            @Value("${spring.ai.vectorstore.pgvector.table-name}") String vectorTableName) {
+            @Value("${spring.ai.vectorstore.pgvector.table-name}") String vectorTableName,
+            DocumentGroupMapper documentGroupMapper) {
         this.vectorStore = vectorStore;
         this.parserFactory = parserFactory;
         this.documentMapper = documentMapper;
@@ -68,14 +73,16 @@ public class KnowledgeBaseService {
         this.chatModel = chatModel;
         this.schemaName = schemaName;
         this.vectorTableName = vectorTableName;
+        this.documentGroupMapper = documentGroupMapper;
     }
 
     private String qualifiedTable() {
         return schemaName + "." + vectorTableName;
     }
 
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public void ingestMultipartFile(MultipartFile file, String parserCategory,
-            String category, String description, String department) {
+            String category, String description, String department, Long parentDocumentId) {
         String fileName = file.getOriginalFilename();
         if (fileName == null || fileName.isBlank()) {
             throw new IllegalArgumentException("文件名不能为空");
@@ -85,27 +92,55 @@ public class KnowledgeBaseService {
             throw new IllegalArgumentException("不支持的文件类型: " + fileName);
         }
 
-        KnowledgeDocument doc = KnowledgeDocument.builder()
-                .documentName(fileName)
-                .documentType(getFileExtension(fileName))
-                .fileSize(file.getSize())
-                .category(category)
-                .description(description)
-                .version("1.0")
-                .status("active")
-                .department(department)
-                .build();
-        documentMapper.insert(doc);
+        DocumentGroup group;
+        if (parentDocumentId != null) {
+            KnowledgeDocument parent = documentMapper.findById(parentDocumentId);
+            if (parent == null) {
+                throw new IllegalArgumentException("父文档不存在: " + parentDocumentId);
+            }
+            if (parent.getGroupId() == null) {
+                throw new IllegalArgumentException("父文档无关联文档组");
+            }
+            group = documentGroupMapper.findById(parent.getGroupId());
+            if (group == null) {
+                throw new IllegalArgumentException("文档组不存在");
+            }
+        } else {
+            group = DocumentGroup.builder()
+                    .name(fileName)
+                    .department(department)
+                    .status("active")
+                    .build();
+            documentGroupMapper.insert(group);
+        }
 
         try (InputStream is = file.getInputStream()) {
             DocumentParser parser = parserFactory.getParser(fileName, parserCategory);
             List<Document> parsedDocs = parser.parse(is);
 
+            String version = extractVersion(parsedDocs);
+
+            KnowledgeDocument doc = KnowledgeDocument.builder()
+                    .documentName(fileName)
+                    .documentType(getFileExtension(fileName))
+                    .fileSize(file.getSize())
+                    .category(category)
+                    .description(description)
+                    .version(version)
+                    .status("active")
+                    .department(department)
+                    .groupId(group.getId())
+                    .isLatest(true)
+                    .build();
+            documentMapper.insert(doc);
+
             Map<String, Object> sharedMeta = new HashMap<>();
             sharedMeta.put("source", fileName);
             sharedMeta.put("file_type", getFileExtension(fileName));
             sharedMeta.put("document_id", doc.getId().toString());
-            // 将前端传入的文档类别透传到切分层，用于精确路由切分策略
+            sharedMeta.put("group_id", String.valueOf(group.getId()));
+            sharedMeta.put("version", version);
+            sharedMeta.put("is_latest", "true");
             if (category != null && !category.isBlank()) {
                 sharedMeta.put("document_category", category);
             }
@@ -115,12 +150,19 @@ public class KnowledgeBaseService {
             ingestParsedDocuments(parsedDocs, sharedMeta, doc.getId());
 
             doc.setChunkCount(countChunksInLastIngest(parsedDocs, sharedMeta));
-            documentMapper.update(doc);
 
-            logger.info("文件上传导入完成: {}, docId={}, 共 {} 个解析单元, 解析器: {}",
-                    fileName, doc.getId(), parsedDocs.size(), parser.getClass().getSimpleName());
+            if (parentDocumentId != null) {
+                documentMapper.markNotLatestByGroup(group.getId());
+                doc.setIsLatest(true);
+            }
+
+            documentMapper.update(doc);
+            documentGroupMapper.updateLatestDocument(group.getId(), doc.getId());
+
+            logger.info("文件上传导入完成: {}, docId={}, groupId={}, version={}, 共 {} 个解析单元",
+                    fileName, doc.getId(), group.getId(), version, parsedDocs.size());
         } catch (Exception e) {
-            logger.error("解析上传文件失败: {}, docId={}", fileName, doc.getId(), e);
+            logger.error("解析上传文件失败: {}", fileName, e);
             throw new RuntimeException("文件解析失败: " + e.getMessage(), e);
         }
     }
@@ -357,22 +399,44 @@ public class KnowledgeBaseService {
      *         "keywordCount"-> int 关键词检索命中数
      *         "mergedCount" -> int 融合后最终条数
      */
-    public Map<String, Object> hybridSearch(String query, int topK, double similarityThreshold, String department) {
+    public Map<String, Object> hybridSearch(String query, int topK, double similarityThreshold,
+            String department, List<VersionOverride> versionOverrides) {
         // 1. 向量语义检索（用双倍 topK 扩大候选池，提高 RRF 融合质量）
         //    排除 FAQ 条目：FAQ 走前置精确匹配，不应混入文档检索结果
         //    部门过滤：指定部门时在向量检索阶段按 metadata.department 过滤
+
+        // Build version filter expression
+        String versionFilter;
+        if (versionOverrides != null && !versionOverrides.isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < versionOverrides.size(); i++) {
+                VersionOverride vo = versionOverrides.get(i);
+                if (i > 0) sb.append(" OR ");
+                sb.append("(group_id == '").append(vo.groupId()).append("' AND version == '").append(vo.version()).append("')");
+            }
+            versionFilter = sb.toString();
+        } else {
+            versionFilter = "is_latest == 'true'";
+        }
+
         SearchRequest.Builder vectorReq = SearchRequest.builder()
                 .query(query)
                 .topK(topK * 2)
                 .similarityThreshold(similarityThreshold);
+
+        // Build combined filter expression: department + version
+        List<String> filters = new ArrayList<>();
         if (department != null && !department.isBlank()) {
-            vectorReq.filterExpression("department == '" + department.replace("'", "''") + "'");
+            filters.add("department == '" + department.replace("'", "''") + "'");
         }
+        filters.add(versionFilter);
+        String combinedFilter = String.join(" AND ", filters);
+        vectorReq.filterExpression(combinedFilter);
         List<Document> vectorResults = vectorStore.similaritySearch(vectorReq.build());
         vectorResults = filterNonFaq(vectorResults);
 
         // 2. 关键词模糊检索（pg_trgm 三元组，中文适用：按字符三元组切分后匹配）
-        List<Document> keywordResults = keywordSearch(query, topK * 2, department);
+        List<Document> keywordResults = keywordSearch(query, topK * 2, department, versionOverrides);
         keywordResults = filterNonFaq(keywordResults);
 
         // 3. RRF 融合排序
@@ -384,6 +448,11 @@ public class KnowledgeBaseService {
             merged = llmRerank(query, merged, 3);
         }
 
+        // 4.5 ★ 质量评分：在 LLM 重排序后、去重前评估检索结果质量
+        QualityScore qualityScore = assessQuality(merged);
+        String qualityStatus = qualityScore.passed() ? "PASSED"
+                : (merged.isEmpty() ? "EMPTY" : "LOW_QUALITY");
+
         // 5. 去重：同文档同章节/同步骤的 chunk 只保留排名最高的那条
         merged = deduplicateByStructure(merged);
 
@@ -392,9 +461,12 @@ public class KnowledgeBaseService {
         result.put("vectorCount", vectorResults.size());
         result.put("keywordCount", keywordResults.size());
         result.put("mergedCount", originalMergedCount);
+        // ★ 新增质量字段
+        result.put("qualityStatus", qualityStatus);
+        result.put("qualityScore", qualityScore);
 
-        logger.info("混合检索: query='{}', 向量命中={}, 关键词命中={}, RRF融合={}, LLM重排后={}",
-                query, vectorResults.size(), keywordResults.size(), originalMergedCount, merged.size());
+        logger.info("混合检索: query='{}', 向量命中={}, 关键词命中={}, RRF融合={}, LLM重排后={}, 质量={}",
+                query, vectorResults.size(), keywordResults.size(), originalMergedCount, merged.size(), qualityStatus);
         return result;
     }
 
@@ -411,6 +483,53 @@ public class KnowledgeBaseService {
      * 去重 key = source 文档名 + heading_path（制度文档）或 step_title（流程文档）。
      * 无结构标记的 chunk 不做去重，保留全部。
      */
+    /**
+     * ★ 检索结果质量评分。
+     * 综合 RRF 融合分数和 LLM 重排序分数，判定是否存在有效召回。
+     *
+     * @param docs LLM 重排序后的文档列表（metadata 中已含 rrf_score 和 llm_score）
+     * @return QualityScore 评分结果，passCount >= 1 表示至少有一条有效召回
+     */
+    private QualityScore assessQuality(List<Document> docs) {
+        if (docs == null || docs.isEmpty()) {
+            return new QualityScore(0, 0, 0, 0);
+        }
+
+        int passCount = 0;
+        double maxCombined = 0;
+        double rrfSum = 0;
+        double llmSum = 0;
+        int count = 0;
+
+        for (Document doc : docs) {
+            if (doc.getMetadata() == null) continue;
+            double rrf = parseMetaDouble(doc.getMetadata().get("rrf_score"));
+            double llm = parseMetaDouble(doc.getMetadata().get("llm_score"));
+            double combined = llm * 10 + rrf * 100;
+            if (combined > maxCombined) maxCombined = combined;
+            // LLM ≥ 3 分 且 RRF ≥ 0.01 → 有效召回
+            if (llm >= 3 && rrf >= 0.01) passCount++;
+            rrfSum += rrf;
+            llmSum += llm;
+            count++;
+        }
+
+        double rrfAvg = count > 0 ? rrfSum / count : 0;
+        double llmAvg = count > 0 ? llmSum / count : 0;
+        return new QualityScore(maxCombined, rrfAvg, llmAvg, passCount);
+    }
+
+    /** 安全地将 metadata Object 转为 double，支持 String 和 Number 类型 */
+    private double parseMetaDouble(Object val) {
+        if (val == null) return 0;
+        if (val instanceof Number n) return n.doubleValue();
+        try {
+            return Double.parseDouble(val.toString());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
     private List<Document> deduplicateByStructure(List<Document> docs) {
         Map<String, Document> seen = new LinkedHashMap<>();
         for (Document doc : docs) {
@@ -465,11 +584,12 @@ public class KnowledgeBaseService {
      * 基于 pg_trgm 的 similarity() 函数做关键词模糊检索。
      * content % query 利用 GIN 索引快速筛选候选，similarity() 计算精确相似度用于排序。
      */
-    private List<Document> keywordSearch(String query, int limit) {
-        return keywordSearch(query, limit, null);
+    private List<Document> keywordSearch(String query, int limit, List<VersionOverride> versionOverrides) {
+        return keywordSearch(query, limit, null, versionOverrides);
     }
 
-    private List<Document> keywordSearch(String query, int limit, String department) {
+    private List<Document> keywordSearch(String query, int limit, String department,
+            List<VersionOverride> versionOverrides) {
         try {
             StringBuilder sqlBuilder = new StringBuilder();
             sqlBuilder.append(String.format(
@@ -481,6 +601,23 @@ public class KnowledgeBaseService {
             if (department != null && !department.isBlank()) {
                 sqlBuilder.append(" AND (metadata->>'department') = ?");
             }
+
+            // Build version filter for keyword search
+            StringBuilder versionCondition = new StringBuilder();
+            if (versionOverrides != null && !versionOverrides.isEmpty()) {
+                versionCondition.append(" AND (");
+                for (int i = 0; i < versionOverrides.size(); i++) {
+                    VersionOverride vo = versionOverrides.get(i);
+                    if (i > 0) versionCondition.append(" OR ");
+                    versionCondition.append(String.format(
+                        "(metadata->>'group_id' = '%s' AND metadata->>'version' = '%s')",
+                        vo.groupId(), vo.version()));
+                }
+                versionCondition.append(")");
+            } else {
+                versionCondition.append(" AND (metadata->>'is_latest') = 'true'");
+            }
+            sqlBuilder.append(versionCondition);
 
             sqlBuilder.append(" ORDER BY keyword_score DESC LIMIT ?");
 
@@ -612,6 +749,12 @@ public class KnowledgeBaseService {
                 int ib = candidates.indexOf(b) + 1;
                 return Double.compare(scores.getOrDefault(ib, 0.0), scores.getOrDefault(ia, 0.0));
             });
+
+            // ★ 将 LLM 评分写入 metadata，供 assessQuality 使用
+            for (int i = 0; i < reranked.size(); i++) {
+                int idx = candidates.indexOf(reranked.get(i)) + 1;
+                reranked.get(i).getMetadata().put("llm_score", scores.getOrDefault(idx, 0.0));
+            }
 
             logger.info("LLM 重排序完成: {}/{} 候选 → top {}", reranked.size(), candidates.size(), topN);
             return reranked.subList(0, Math.min(topN, reranked.size()));
@@ -782,5 +925,36 @@ public class KnowledgeBaseService {
         batchAdd(allChunks, documentId);
         logger.info("文档解析并入库: {} 个解析单元 -> {} 个向量分块", parsedDocs.size(), allChunks.size());
         return allChunks.size();
+    }
+
+    /**
+     * 从文档文本内容中自动提取版本号。
+     * 策略：正则优先匹配常见中文制度文档的年份模式，提取失败时回退为当前年份。
+     */
+    private String extractVersion(List<Document> parsedDocs) {
+        String fullText = parsedDocs.stream()
+                .map(Document::getText)
+                .collect(Collectors.joining("\n"));
+
+        // 匹配文号中的年份，如：〔2026〕、(2025)、[2026]
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("[〔\\(\\[]\\s*(20\\d{2})\\s*[〕\\)\\]]").matcher(fullText);
+        if (m.find()) {
+            return m.group(1);
+        }
+
+        // 匹配发布日期，如：2026年1月1日、2026-01-01
+        m = java.util.regex.Pattern.compile("(20\\d{2})\\s*年|(20\\d{2})[-/]\\d{1,2}[-/]\\d{1,2}").matcher(fullText);
+        if (m.find()) {
+            return m.group(1) != null ? m.group(1) : m.group(2);
+        }
+
+        // 匹配标题中的版本号：v2026, V2025
+        m = java.util.regex.Pattern.compile("[vV](20\\d{2})").matcher(fullText);
+        if (m.find()) {
+            return m.group(1);
+        }
+
+        // 回退：当前年份
+        return String.valueOf(java.time.Year.now().getValue());
     }
 }

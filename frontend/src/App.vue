@@ -66,6 +66,16 @@
               <el-icon :size="22"><Document /></el-icon>
               <span v-if="sidebarExpanded" class="nav-label">知识库管理</span>
             </div>
+
+            <div
+              class="sidebar-nav-item"
+              :class="{ active: isActive('/quality/dashboard') }"
+              title="质量监控"
+              @click="navTo('/quality/dashboard')"
+            >
+              <el-icon :size="22"><TrendCharts /></el-icon>
+              <span v-if="sidebarExpanded" class="nav-label">质量监控</span>
+            </div>
           </template>
         </div>
 
@@ -108,7 +118,7 @@
 <script setup lang="ts">
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ChatDotRound, Collection, Document, SwitchButton, Fold, Expand } from '@element-plus/icons-vue'
+import { ChatDotRound, Collection, Document, TrendCharts, SwitchButton, Fold, Expand } from '@element-plus/icons-vue'
 import { authLogout } from '@/api/agent'
 import { DEPARTMENTS } from '@/constants/departments'
 
