@@ -29,6 +29,7 @@
             </div>
             <el-popconfirm
               title="确定删除此会话？"
+              width="200"
               @confirm="chatStore.deleteSession(sess.threadId)"
               @click.stop
             >
@@ -120,8 +121,26 @@
                 <div v-for="(src, si) in msg.sources" :key="si" class="source-item">
                   <span class="source-index">{{ si + 1 }}</span>
                   <div class="source-body">
-                    <span class="source-doc">{{ src.document }}</span>
+                    <div class="source-doc-row">
+                      <span class="source-doc">{{ src.document }}</span>
+                      <span v-if="src.version" class="source-version-tag"
+                            :class="{ clickable: src.has_history }"
+                            @click="src.has_history && toggleVersionSelect(src)">
+                        v{{ src.version }}
+                        <span v-if="src.has_history" class="version-arrow">▾</span>
+                      </span>
+                    </div>
                     <span v-if="src.clause" class="source-clause">{{ src.clause }}</span>
+
+                    <div v-if="src.has_history && activeVersionSelect === src" class="version-dropdown">
+                      <div
+                        v-for="v in getAvailableVersions(src)"
+                        :key="v"
+                        class="version-option"
+                        :class="{ active: v === src.version }"
+                        @click="switchSourceVersion(src, v, msg.id)"
+                      >v{{ v }}</div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -167,6 +186,7 @@ import { ElMessage } from 'element-plus'
 import { Delete, Expand, Fold, Plus, CopyDocument, Promotion, Loading, ChatDotRound } from '@element-plus/icons-vue'
 import { useChatStore } from '@/stores/chat'
 import { ragQaChat, ragQaChatStream, submitFeedback } from '@/api/agent'
+import type { VersionInfoItem, MessageSource } from '@/types'
 import thumbUpWhite from '@/assets/icons/点赞-白.svg'
 import thumbUpBlack from '@/assets/icons/点赞-黑.svg'
 import thumbDownWhite from '@/assets/icons/点踩-白.svg'
@@ -192,6 +212,8 @@ interface SearchInfo {
 const searchInfoMap = ref<Record<string, SearchInfo>>({})
 /** 展开的引用出处面板的消息 ID 集合 */
 const expandedCitations = ref<Set<string>>(new Set())
+/** 当前活跃的版本选择下拉（指向 MessageSource） */
+const activeVersionSelect = ref<MessageSource | null>(null)
 
 const exampleQuestions = [
   '年假怎么申请？',
@@ -338,6 +360,27 @@ function handleStreamEvent(event: { type: string; content: unknown }, threadId: 
     case 'search_info':
       searchInfoMap.value[msgId] = event.content as SearchInfo
       break
+    case 'version_info':
+      const versionItems = (event.content as { items: VersionInfoItem[] }).items
+      versionItems.forEach(item => {
+        const msgs = chatStore.messages[threadId]
+        if (!msgs) return
+        const msg = msgs.find(m => m.id === msgId)
+        if (!msg?.sources) return
+        msg.sources.forEach(src => {
+          if (src.group_id === item.group_id) {
+            src.version = item.current_version
+            src.has_history = item.available_versions.length > 1
+          }
+        })
+      })
+      if (versionItems.length > 0) {
+        searchInfoMap.value[msgId] = {
+          ...searchInfoMap.value[msgId],
+          version_items: versionItems
+        } as unknown as SearchInfo
+      }
+      break
     case 'error':
       ElMessage.error((event.content as string) || '流式输出异常')
       break
@@ -388,6 +431,96 @@ function toggleCitation(msgId: string) {
     s.add(msgId)
   }
   expandedCitations.value = s
+}
+
+function toggleVersionSelect(src: MessageSource) {
+  activeVersionSelect.value = activeVersionSelect.value === src ? null : src
+}
+
+function getAvailableVersions(src: MessageSource): string[] {
+  for (const info of Object.values(searchInfoMap.value)) {
+    const vi = (info as any).version_items as VersionInfoItem[] | undefined
+    if (!vi) continue
+    const match = vi.find(v => v.group_id === src.group_id)
+    if (match) return match.available_versions
+  }
+  return []
+}
+
+async function switchSourceVersion(src: MessageSource, version: string, msgId: string) {
+  activeVersionSelect.value = null
+  if (version === src.version) return
+
+  const threadId = chatStore.currentThreadId
+  const msgs = chatStore.messages[threadId]
+  if (!msgs) return
+  const userMsg = [...msgs].reverse().find(m => m.role === 'user')
+  if (!userMsg) return
+  const text = userMsg.content
+
+  const currentMsg = msgs.find(m => m.id === msgId)
+  const overrides = (currentMsg?.sources || [])
+    .filter(s => s.has_history)
+    .map(s => ({
+      group_id: s.group_id!,
+      version: s.group_id === src.group_id ? version : (s.version || '')
+    }))
+    .filter(o => o.version)
+
+  chatStore.addMessage(threadId, 'user', `[查询 v${version} 版本] ${text}`)
+  scrollToBottom()
+
+  sending.value = true
+  const assistantMsgId = chatStore.addMessage(threadId, 'assistant', '')
+
+  try {
+    const dept = localStorage.getItem('selectedDepartment') || undefined
+    const response = await ragQaChatStream({
+      userMessage: text,
+      threadId,
+      department: dept,
+      versionOverrides: overrides
+    })
+
+    if (!response.ok || !response.body) {
+      throw new Error('SSE not supported')
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed) continue
+        if (trimmed.startsWith('data:')) {
+          const jsonStr = trimmed.slice(5).trim()
+          if (!jsonStr) continue
+          try {
+            const event = JSON.parse(jsonStr)
+            handleStreamEvent(event, threadId, assistantMsgId)
+          } catch { /* ignore parse errors */ }
+        }
+      }
+    }
+  } catch {
+    ElMessage.error('版本切换查询失败')
+    const msgs2 = chatStore.messages[threadId]
+    if (msgs2) {
+      const idx = msgs2.findIndex(m => m.id === assistantMsgId)
+      if (idx >= 0) msgs2.splice(idx, 1)
+    }
+  } finally {
+    sending.value = false
+    scrollToBottom()
+  }
 }
 
 function newChat() {
@@ -797,6 +930,7 @@ onMounted(async () => {
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  position: relative;
 }
 
 .source-doc {
@@ -958,4 +1092,51 @@ onMounted(async () => {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* Version tags in citation panel */
+.source-doc-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.source-version-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: #E8F5E9;
+  color: #2E7D32;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.source-version-tag.clickable {
+  cursor: pointer;
+  padding-right: 3px;
+}
+.source-version-tag.clickable:hover {
+  background: #C8E6C9;
+}
+.version-arrow {
+  font-size: 8px;
+  margin-left: 2px;
+}
+.version-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--white);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  z-index: 10;
+  min-width: 80px;
+}
+.version-option {
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.version-option:hover { background: var(--surface-warm); }
+.version-option.active { color: var(--primary); font-weight: 600; }
 </style>
