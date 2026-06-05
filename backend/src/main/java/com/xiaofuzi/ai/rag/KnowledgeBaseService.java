@@ -79,6 +79,7 @@ public class KnowledgeBaseService {
         return schemaName + "." + vectorTableName;
     }
 
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public void ingestMultipartFile(MultipartFile file, String parserCategory,
             String category, String description, String department, Long parentDocumentId) {
         String fileName = file.getOriginalFilename();
@@ -160,7 +161,7 @@ public class KnowledgeBaseService {
             logger.info("文件上传导入完成: {}, docId={}, groupId={}, version={}, 共 {} 个解析单元",
                     fileName, doc.getId(), group.getId(), version, parsedDocs.size());
         } catch (Exception e) {
-            logger.error("解析上传文件失败: {}, docId 未知", fileName, e);
+            logger.error("解析上传文件失败: {}", fileName, e);
             throw new RuntimeException("文件解析失败: " + e.getMessage(), e);
         }
     }
