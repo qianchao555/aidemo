@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -26,12 +27,19 @@ public class FaqService {
     private final VectorStore vectorStore;
     private final EmbeddingModel embeddingModel;
 
-    /** 语义聚类相似度阈值：两个 query 的余弦相似度高于此值时归入同一簇 */
-    private static final double CLUSTER_THRESHOLD = 0.85;
-    /** 已覆盖过滤阈值：簇质心与现有 FAQ 问题相似度高于此值时视为已覆盖 */
-    private static final double COVERAGE_THRESHOLD = 0.85;
-    /** 批量 embedding 调用时每次传入的最大 query 数 */
-    private static final int EMBEDDING_BATCH_SIZE = 50;
+    @Value("${app.faq.cluster-threshold:0.85}")
+    private double clusterThreshold;
+
+    @Value("${app.faq.coverage-threshold:0.85}")
+    private double coverageThreshold;
+
+    @Value("${app.faq.embedding-batch-size:50}")
+    private int embeddingBatchSize;
+
+    @Value("${app.faq.similarity-threshold:0.7}")
+    private double similarityThreshold;
+
+    private static final String DEFAULT_FAQ_SOURCE = "FAQ 标准答案";
 
     public FaqService(FaqEntryMapper faqEntryMapper, ChatHistoryMapper chatHistoryMapper,
                       KnowledgeBaseService knowledgeBaseService,
@@ -249,14 +257,14 @@ public class FaqService {
 
     /**
      * 批量调用 EmbeddingModel 将 query 列表转为向量。
-     * 每次最多传 {@value #EMBEDDING_BATCH_SIZE} 条，避免单次请求过大。
+     * 每次最多传 {@value #embeddingBatchSize} 条，避免单次请求过大。
      */
     private List<float[]> batchEmbed(List<QueryFreq> queryFreqs) {
         List<float[]> result = new ArrayList<>();
         List<String> allQueries = queryFreqs.stream().map(qf -> qf.query).collect(Collectors.toList());
 
-        for (int i = 0; i < allQueries.size(); i += EMBEDDING_BATCH_SIZE) {
-            int end = Math.min(i + EMBEDDING_BATCH_SIZE, allQueries.size());
+        for (int i = 0; i < allQueries.size(); i += embeddingBatchSize) {
+            int end = Math.min(i + embeddingBatchSize, allQueries.size());
             List<String> batch = allQueries.subList(i, end);
             try {
                 List<float[]> batchResult = embeddingModel.embed(batch);
@@ -291,7 +299,7 @@ public class FaqService {
                 }
             }
 
-            if (bestSim > CLUSTER_THRESHOLD && bestCluster >= 0) {
+            if (bestSim > clusterThreshold && bestCluster >= 0) {
                 // 归入已有簇，按频次加权更新质心
                 clusters.get(bestCluster).addMember(i, vec, qf.freq);
             } else {
@@ -314,8 +322,8 @@ public class FaqService {
                 .map(FaqEntry::getQuestion)
                 .collect(Collectors.toList());
         List<float[]> faqVectors = new ArrayList<>();
-        for (int i = 0; i < faqQuestions.size(); i += EMBEDDING_BATCH_SIZE) {
-            int end = Math.min(i + EMBEDDING_BATCH_SIZE, faqQuestions.size());
+        for (int i = 0; i < faqQuestions.size(); i += embeddingBatchSize) {
+            int end = Math.min(i + embeddingBatchSize, faqQuestions.size());
             List<String> batch = faqQuestions.subList(i, end);
             try {
                 List<float[]> batchResult = embeddingModel.embed(batch);
@@ -330,7 +338,7 @@ public class FaqService {
         for (SemanticCluster cluster : clusters) {
             boolean covered = false;
             for (float[] faqVec : faqVectors) {
-                if (cosineSimilarity(cluster.centroid, faqVec) > COVERAGE_THRESHOLD) {
+                if (cosineSimilarity(cluster.centroid, faqVec) > coverageThreshold) {
                     covered = true;
                     break;
                 }
@@ -417,7 +425,7 @@ public class FaqService {
                 continue;
             }
             double sim = cosineSimilarity(inputVec, entryVec);
-            if (sim > 0.7) {
+            if (sim > similarityThreshold) {
                 result.add(Map.of("id", entry.getId(), "question", entry.getQuestion(),
                         "similarity", Math.round(sim * 1000.0) / 10.0));
             }
@@ -427,7 +435,7 @@ public class FaqService {
     }
 
     public Map<String, Object> getStats() {
-        long totalFaq = faqEntryMapper.countByFilters(null, "active", null);
+        long totalFaq = faqEntryMapper.countByFilters(null, com.xiaofuzi.ai.util.AppConstants.STATUS_ACTIVE, null);
         long totalHits = faqEntryMapper.findAllActive().stream()
                 .mapToLong(f -> f.getHitCount() != null ? f.getHitCount() : 0).sum();
         long todayHits = faqEntryMapper.countTodayHits();
@@ -456,7 +464,7 @@ public class FaqService {
             metadata.put("content_type", "faq_entry");
             metadata.put("faq_id", entry.getId());
             metadata.put("faq_category", entry.getCategory() != null ? entry.getCategory() : "");
-            metadata.put("source", entry.getSourceDoc() != null ? entry.getSourceDoc() : "FAQ 标准答案");
+            metadata.put("source", entry.getSourceDoc() != null ? entry.getSourceDoc() : DEFAULT_FAQ_SOURCE);
             metadata.put("heading_path", entry.getHeadingPath() != null ? entry.getHeadingPath() : "");
             metadata.put("skip_split", true);
 

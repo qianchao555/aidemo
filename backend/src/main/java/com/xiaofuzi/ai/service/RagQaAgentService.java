@@ -30,6 +30,10 @@ public class RagQaAgentService {
 
     //最大对话轮数
     private static final int MAX_HISTORY_ROUNDS = 5;
+    private static final String SOURCE_MARKER = "【出处】";
+    private static final String SOURCE_SEPARATOR = ">";
+    private static final int TITLE_MAX_LENGTH = 30;
+    private static final String DEFAULT_SESSION_TITLE = "新对话";
 
     private final ReactAgent ragQaAgent;
     private final ChatHistoryMapper chatHistoryMapper;
@@ -56,7 +60,7 @@ public class RagQaAgentService {
 
     public AskResult ask(String threadId, Long userId, String question) {
         if (threadId == null || threadId.isBlank()) {
-            threadId = UUID.randomUUID().toString().replace("-", "");
+            threadId = com.xiaofuzi.ai.util.AppConstants.uuidNoDash();
         }
 
         logger.info("RAG问答请求 | threadId: {} | userId: {} | question: {}", threadId, userId, question);
@@ -177,10 +181,10 @@ public class RagQaAgentService {
 
     private String[] extractSourceInfo(String content) {
         if (content == null || content.isBlank()) return new String[]{null, null};
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("【出处】(.*?)(\\n|$)").matcher(content);
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile(SOURCE_MARKER + "(.*?)(\\n|$)").matcher(content);
         if (!m.find()) return new String[]{null, null};
         String raw = m.group(1).trim();
-        String[] parts = raw.split(">", 2);
+        String[] parts = raw.split(SOURCE_SEPARATOR, 2);
         String doc = parts[0].trim();
         String heading = parts.length > 1 ? parts[1].trim() : null;
         return new String[]{doc.isEmpty() ? null : doc, heading != null && heading.isEmpty() ? null : heading};
@@ -195,9 +199,9 @@ public class RagQaAgentService {
                 .findFirst()
                 .map(h -> {
                     String c = h.getContent();
-                    return c != null && c.length() > 30 ? c.substring(0, 30) + "..." : c;
+                    return c != null && c.length() > TITLE_MAX_LENGTH ? c.substring(0, TITLE_MAX_LENGTH) + "..." : c;
                 })
-                .orElse("新对话");
+                .orElse(DEFAULT_SESSION_TITLE);
 
         ChatSession session = chatSessionMapper.findByThreadId(threadId);
         if (session != null) {

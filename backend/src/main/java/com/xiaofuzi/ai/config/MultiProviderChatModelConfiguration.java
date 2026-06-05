@@ -28,21 +28,41 @@ public class MultiProviderChatModelConfiguration {
     @Value("${ai.chat.model:}")
     private String modelName;
 
+    @Value("${ai.chat.dashscope.base-url:https://dashscope.aliyuncs.com}")
+    private String dashscopeBaseUrl;
+
+    @Value("${ai.chat.volcano-engine.base-url:https://ark.cn-beijing.volces.com/api/v3}")
+    private String volcanoBaseUrl;
+
+    @Value("${ai.chat.volcano-engine.model:doubao-pro-32k}")
+    private String volcanoModel;
+
+    @Value("${ai.chat.openai.base-url:https://api.openai.com/v1}")
+    private String openaiBaseUrl;
+
+    @Value("${ai.chat.openai.model:gpt-4}")
+    private String openaiModel;
+
     @Bean
     @ConditionalOnProperty(prefix = "ai.chat", name = "provider", havingValue = "dashscope", matchIfMissing = true)
     public ChatModel dashScopeChatModel() {
-        return ChatModelProvider.createDashScopeModel(apiKey, baseUrl, modelName);
+        String effectiveBaseUrl = baseUrl != null && !baseUrl.isBlank() ? baseUrl : dashscopeBaseUrl;
+        return ChatModelProvider.createDashScopeModel(apiKey, effectiveBaseUrl, modelName);
     }
 
     @Bean
     @ConditionalOnProperty(prefix = "ai.chat", name = "provider", havingValue = "volcano-engine")
     public ChatModel volcanoEngineChatModel() {
-        return ChatModelProvider.createVolcanoEngineModel(apiKey, baseUrl, modelName);
+        String effectiveBaseUrl = baseUrl != null && !baseUrl.isBlank() ? baseUrl : volcanoBaseUrl;
+        String effectiveModel = modelName != null && !modelName.isBlank() ? modelName : volcanoModel;
+        return ChatModelProvider.createVolcanoEngineModel(apiKey, effectiveBaseUrl, effectiveModel);
     }
 
     @Bean
     @ConditionalOnProperty(prefix = "ai.chat", name = "provider", havingValue = "openai")
     public ChatModel openAiChatModel() {
-        return ChatModelProvider.createOpenAIModel(apiKey, baseUrl, modelName);
+        String effectiveBaseUrl = baseUrl != null && !baseUrl.isBlank() ? baseUrl : openaiBaseUrl;
+        String effectiveModel = modelName != null && !modelName.isBlank() ? modelName : openaiModel;
+        return ChatModelProvider.createOpenAIModel(apiKey, effectiveBaseUrl, effectiveModel);
     }
 }

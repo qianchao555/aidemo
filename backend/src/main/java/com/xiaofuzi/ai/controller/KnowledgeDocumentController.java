@@ -36,6 +36,8 @@ public class KnowledgeDocumentController {
             "chunkCount", "status", "createTime", "updateTime"
     );
 
+    private static final String DEFAULT_VERSION = "1.0";
+
     private static final java.util.Map<String, String> SORT_COLUMN_MAPPING = java.util.Map.of(
             "documentName", "document_name",
             "documentType", "document_type",
@@ -110,7 +112,7 @@ public class KnowledgeDocumentController {
 
         // 更新文档元信息：版本号和分块数
         doc.setChunkCount(chunkCount);
-        String oldVersion = doc.getVersion() != null ? doc.getVersion() : "1.0";
+        String oldVersion = doc.getVersion() != null ? doc.getVersion() : DEFAULT_VERSION;
         String[] parts = oldVersion.split("\\.");
         int minor = Integer.parseInt(parts[parts.length - 1]) + 1;
         doc.setVersion(parts[0] + "." + minor);

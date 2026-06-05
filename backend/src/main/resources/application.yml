@@ -8,12 +8,11 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/aidemo
     username: postgres
-    password: 123456
+    password: ${DB_PASSWORD:123456}
     driver-class-name: org.postgresql.Driver
   ai:
     dashscope:
       api-key: ${AI_DASHSCOPE_API_KEY:}
-#      api-key: ${AI_DASHSCOPE_API_KEY:sk-539bcdb175774d1cafa3c0f3adb9bad6}
       base-url: https://dashscope.aliyuncs.com
       #chat:聊天，image:图像生成，embedding:文本向量化
       chat:
@@ -43,48 +42,61 @@ spring:
         host: localhost
         port: 19530
         username: root
-        password: milvus
+        password: ${MILVUS_PASSWORD:milvus}
         database-name: default
         collection-name: xiaofuzi_knowledge_base
         embedding-dimension: 1536
         index-type: IVF_FLAT
         metric-type: COSINE
         initialize-schema: true
-    #MCP配置
-#    mcp:
-#      client:
-#        enabled: true
-#        name: xiaofuzi-mcp-client
-#        version: 1.0.0
-#        initialized: true
-#        request-timeout: 50s
-#        type: SYNC
-#        root-change-notification: true
-#        toolcallback.enabled: true
-#        annotation-scanner: true
-#        stdio:
-#          servers-configuration: classpath:/mcp-servers-config.json
-#      server:
-#        enabled: true
-#        name: xiaofuzi-mcp-server
-#        version: 1.0.0
 
 skills:
   file-system:
     path: ./external-skills
 
 #自定义配置
+app:
+  init:
+    default-admin: zhangsan
+    default-password: "123456"
+    default-department: 全公司
+    default-role: user
+  agent:
+    sse:
+      timeout-ms: 180000  # SSE 连接超时（毫秒）
+      token-delay-ms: 30  # SSE 逐句发送间隔（毫秒）
+  rag:
+    embedding-batch-size: 25  # 向量入库批次大小
+    rrf-k: 60.0  # RRF 融合排序 k 值
+    quality:
+      rrf-threshold: 0.01  # 有效召回 RRF 分数下限
+      llm-threshold: 3  # 有效召回 LLM 评分下限
+    rerank-top-n: 3  # LLM 重排序保留数量
+    chunk-truncate-length: 500  # LLM 重排序时 chunk 截断长度
+  faq:
+    cluster-threshold: 0.85  # 语义聚类相似度阈值
+    coverage-threshold: 0.85  # 已覆盖过滤阈值
+    similarity-threshold: 0.7  # 相似检测阈值
+    embedding-batch-size: 50  # FAQ embedding 批次大小
+  workspace:
+    path: ./workspace  # 文件系统工具工作目录
+
 ai:
   chat:
     enabled: true  # 启用手动配置的ChatModel
     provider: dashscope  # 可选值: 默认dashscope, volcano-engine, openai
     api-key: ${AI_DASHSCOPE_API_KEY:}
-#    api-key: ${AI_DASHSCOPE_API_KEY:sk-539bcdb175774d1cafa3c0f3adb9bad6}
     base-url: https://dashscope.aliyuncs.com
     model: qwen-plus
-  agent:
-    name: xiaofuzi-agent
-    description: xxx
+    dashscope:
+      base-url: https://dashscope.aliyuncs.com
+    volcano-engine:
+      base-url: https://ark.cn-beijing.volces.com/api/v3
+      model: doubao-pro-32k
+    openai:
+      base-url: https://api.openai.com/v1
+      model: gpt-4
+
 
 
 mybatis:
