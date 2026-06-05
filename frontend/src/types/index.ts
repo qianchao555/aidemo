@@ -46,6 +46,31 @@ export interface SimilarFaqItem {
   similarity: number
 }
 
+/** 版本覆盖参数 */
+export interface VersionOverride {
+  group_id: number
+  version: string
+}
+
+/** version_info SSE 事件内容 */
+export interface VersionInfoItem {
+  group_id: number
+  group_name: string
+  current_version: string
+  available_versions: string[]
+}
+
+/** 文档组 */
+export interface DocumentGroup {
+  id?: number
+  name: string
+  latestDocumentId?: number
+  department?: string
+  status?: string
+  createTime?: string
+  updateTime?: string
+}
+
 /** 聊天消息 */
 export interface ChatMessage {
   id: string
@@ -106,6 +131,8 @@ export interface KnowledgeDocument {
   status?: string
   createTime?: string
   updateTime?: string
+  groupId?: number
+  isLatest?: boolean
 }
 
 /** 会话摘要 */
@@ -118,7 +145,7 @@ export interface SessionSummary {
 
 /** SSE 流式事件结构 */
 export interface StreamEvent {
-  type: 'thinking' | 'token' | 'source' | 'done' | 'error'
+  type: 'thinking' | 'token' | 'source' | 'done' | 'error' | 'version_info' | 'search_info'
   content: unknown
 }
 
@@ -178,6 +205,9 @@ export interface MessageSource {
   document: string
   clause?: string
   page?: number
+  version?: string
+  group_id?: number
+  has_history?: boolean
 }
 
 /** 质量监控概览 */
