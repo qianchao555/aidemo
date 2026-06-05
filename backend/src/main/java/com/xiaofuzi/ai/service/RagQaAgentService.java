@@ -36,17 +36,17 @@ public class RagQaAgentService {
         this.chatSessionMapper = chatSessionMapper;
     }
 
-    public String ask(String threadId, Long userId, String question) {
+    public record AskResult(String response, Long userMsgId, Long assistantMsgId) {}
+
+    public AskResult ask(String threadId, Long userId, String question) {
         if (threadId == null || threadId.isBlank()) {
             threadId = UUID.randomUUID().toString().replace("-", "");
         }
 
         logger.info("RAG问答请求 | threadId: {} | userId: {} | question: {}", threadId, userId, question);
 
-        //保存用户的对话信息
-        saveHistory(threadId, "user", question, null, null);
+        ChatHistory userMsg = saveHistory(threadId, "user", question, null, null);
 
-        //压缩历史问题并注入：具备历史对话的请求
         String enrichedQuestion = buildEnrichedQuestion(threadId, question);
 
         try {
@@ -54,11 +54,12 @@ public class RagQaAgentService {
             String responseText = agentResponse.getText();
             logger.info("RAG问答完成 | threadId: {} | 响应长度: {} 字符", threadId, responseText.length());
 
-            saveHistory(threadId, "assistant", responseText, null, null);
+            String[] srcInfo = extractSourceInfo(responseText);
+            ChatHistory assistantMsg = saveHistory(threadId, "assistant", responseText, srcInfo[0], srcInfo[1]);
 
             updateSession(threadId, userId);
 
-            return responseText;
+            return new AskResult(responseText, userMsg.getId(), assistantMsg.getId());
         } catch (GraphRunnerException e) {
             logger.error("RAG问答执行出错 | threadId: {}", threadId, e);
             throw new RuntimeException("RAG问答执行出错: " + e.getMessage(), e);
@@ -97,8 +98,8 @@ public class RagQaAgentService {
         return context.toString();
     }
 
-    private void saveHistory(String threadId, String role, String content,
-                             String sourceDoc, String headingPath) {
+    private ChatHistory saveHistory(String threadId, String role, String content,
+                                     String sourceDoc, String headingPath) {
         ChatHistory history = ChatHistory.builder()
                 .threadId(threadId)
                 .role(role)
@@ -108,6 +109,18 @@ public class RagQaAgentService {
                 .createTime(LocalDateTime.now())
                 .build();
         chatHistoryMapper.insert(history);
+        return history;
+    }
+
+    private String[] extractSourceInfo(String content) {
+        if (content == null || content.isBlank()) return new String[]{null, null};
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("【出处】(.*?)(\\n|$)").matcher(content);
+        if (!m.find()) return new String[]{null, null};
+        String raw = m.group(1).trim();
+        String[] parts = raw.split(">", 2);
+        String doc = parts[0].trim();
+        String heading = parts.length > 1 ? parts[1].trim() : null;
+        return new String[]{doc.isEmpty() ? null : doc, heading != null && heading.isEmpty() ? null : heading};
     }
 
     private void updateSession(String threadId, Long userId) {

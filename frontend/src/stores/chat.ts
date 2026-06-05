@@ -150,6 +150,16 @@ export const useChatStore = defineStore('chat', () => {
     saveMessagesCache()
   }
 
+  function updateMessageId(threadId: string, oldId: string, newId: string) {
+    const msgs = messages.value[threadId]
+    if (!msgs) return
+    const msg = msgs.find(m => m.id === oldId)
+    if (msg) {
+      msg.id = newId
+    }
+    saveMessagesCache()
+  }
+
   function addSource(threadId: string, msgId: string, source: MessageSource) {
     const msgs = messages.value[threadId]
     if (!msgs) return
@@ -179,6 +189,6 @@ export const useChatStore = defineStore('chat', () => {
     sessions, currentThreadId, messages, loadingSessions,
     currentMessages, hasCurrentSession,
     fetchSessions, createSession, switchSession, deleteSession,
-    addMessage, appendContent, finishMessage, addSource
+    addMessage, appendContent, finishMessage, addSource, updateMessageId
   }
 })

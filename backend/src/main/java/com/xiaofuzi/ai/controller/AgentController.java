@@ -57,8 +57,8 @@ public class AgentController {
         Long userId = UserContext.get().getId();
         DepartmentContextHolder.set(contentChatRequest.getDepartment());
         try {
-            String response = ragQaAgentService.ask(threadId, userId, message);
-            return Result.success(response);
+            RagQaAgentService.AskResult result = ragQaAgentService.ask(threadId, userId, message);
+            return Result.success(result.response());
         } finally {
             DepartmentContextHolder.clear();
         }
@@ -84,7 +84,8 @@ public class AgentController {
                         Map.of("type", "thinking", "content", "正在检索知识库..."));
                 emitter.send(SseEmitter.event().name("thinking").data(thinkingJson));
 
-                String response = ragQaAgentService.ask(finalThreadId, finalUserId, userMessage);
+                RagQaAgentService.AskResult result = ragQaAgentService.ask(finalThreadId, finalUserId, userMessage);
+                String response = result.response();
 
                 // 推送检索元信息给前端展示
                 Map<String, Object> searchInfo = ragQaMessageHook.getLastSearchInfo();
@@ -105,7 +106,10 @@ public class AgentController {
                 }
 
                 String doneJson = objectMapper.writeValueAsString(
-                        Map.of("type", "done", "content", finalThreadId));
+                        Map.of("type", "done", "content",
+                                Map.of("threadId", finalThreadId,
+                                       "userMsgId", result.userMsgId(),
+                                       "assistantMsgId", result.assistantMsgId())));
                 emitter.send(SseEmitter.event().name("done").data(doneJson));
                 emitter.complete();
             } catch (Exception e) {

@@ -12,6 +12,10 @@ http.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = 'Bearer ' + token
   }
+  // 禁用 GET 缓存，避免 304 响应
+  if (config.method?.toLowerCase() === 'get') {
+    config.headers['Cache-Control'] = 'no-cache'
+  }
   return config
 })
 

@@ -317,9 +317,24 @@ function handleStreamEvent(event: { type: string; content: unknown }, threadId: 
     case 'source':
       chatStore.addSource(threadId, msgId, event.content as { document: string; clause?: string })
       break
-    case 'done':
+    case 'done': {
       chatStore.finishMessage(threadId, msgId)
+      const doneInfo = event.content as { threadId?: string; userMsgId?: number; assistantMsgId?: number }
+      if (doneInfo.assistantMsgId) {
+        chatStore.updateMessageId(threadId, msgId, String(doneInfo.assistantMsgId))
+      }
+      if (doneInfo.userMsgId) {
+        const msgs = chatStore.messages[threadId]
+        if (msgs) {
+          const userMsgs = msgs.filter(m => m.role === 'user')
+          const userMsg = userMsgs[userMsgs.length - 1]
+          if (userMsg) {
+            chatStore.updateMessageId(threadId, userMsg.id, String(doneInfo.userMsgId))
+          }
+        }
+      }
       break
+    }
     case 'search_info':
       searchInfoMap.value[msgId] = event.content as SearchInfo
       break

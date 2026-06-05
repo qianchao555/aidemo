@@ -179,3 +179,51 @@ export interface MessageSource {
   clause?: string
   page?: number
 }
+
+/** 质量监控概览 */
+export interface QualityOverview {
+  totalAnswers: number
+  thumbsUp: number
+  thumbsDown: number
+  unrated: number
+  satisfactionRate: number | null
+}
+
+/** 每日评分趋势数据点 */
+export interface DailyRatingTrendItem {
+  day: string
+  thumbsUp: number
+  thumbsDown: number
+  unrated: number
+  satisfactionRate: number | null
+}
+
+/** 低质量回答 */
+export interface LowRatedMessage {
+  id: number
+  threadId: string
+  userQuestion: string
+  assistantAnswerExcerpt: string
+  assistantAnswerFull: string
+  sourceDoc: string
+  headingPath: string
+  createTime: string
+  rating: number
+}
+
+/** 知识盲区 */
+export interface BlindSpotItem {
+  sourceDoc: string
+  headingPath: string
+  negativeCount: number
+  lastOccurrence: string
+}
+
+/** 部门质量统计 */
+export interface DepartmentQualityItem {
+  department: string
+  totalRated: number
+  thumbsUp: number
+  thumbsDown: number
+  satisfactionRate: number | null
+}

@@ -45,6 +45,12 @@ const router = createRouter({
       name: 'KnowledgeBase',
       component: () => import('@/views/knowledge/KnowledgeBase.vue'),
       meta: { title: '知识库管理', roles: ['admin'] }
+    },
+    {
+      path: '/quality/dashboard',
+      name: 'QualityDashboard',
+      component: () => import('@/views/quality/QualityDashboard.vue'),
+      meta: { title: '质量监控', roles: ['admin'] }
     }
   ]
 })

@@ -25,4 +25,14 @@ public interface ChatHistoryMapper {
     List<Map<String, Object>> findUserQueryFrequencies();
 
     void updateRating(@Param("id") Long id, @Param("rating") Integer rating);
+
+    Map<String, Object> getRatingDistribution();
+
+    List<Map<String, Object>> dailyRatingTrend(@Param("days") int days);
+
+    List<Map<String, Object>> findLowRatedMessages(@Param("limit") int limit);
+
+    List<Map<String, Object>> findBlindSpots(@Param("limit") int limit);
+
+    List<Map<String, Object>> departmentRatingStats();
 }
