@@ -257,7 +257,8 @@ function renderContent(text: string): string {
   // ★ 同时去掉「💡 您可以继续问：」段落（改为 Chips 渲染，避免重复显示）
   const cleaned = text
     .replace(/【出处】.*?(\n|$)/g, '')
-    .replace(/\n?---?\n💡\s*您可以继续问[：:][\s\S]*$/g, '')  // ★ 移除建议问题段落
+    .replace(/\n?---?\n💡\s*您可以继续问[：:][\s\S]*$/g, '')  // 带 --- 分隔线的建议段落
+    .replace(/\n💡\s*您可以继续问[：:][\s\S]*$/g, '')  // 无分隔线的建议段落（兜底）
     .replace(/\n{3,}/g, '\n\n')
   return marked.parse(cleaned, { async: false }) as string
 }
