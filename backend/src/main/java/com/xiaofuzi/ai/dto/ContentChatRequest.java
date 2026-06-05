@@ -3,6 +3,9 @@ package com.xiaofuzi.ai.dto;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
+import java.util.List;
+import java.util.Map;
+
 /**
  * 请求实体类
  *
@@ -31,4 +34,6 @@ public class ContentChatRequest {
     private Long userId;
 
     private String department;
+
+    private List<Map<String, Object>> versionOverrides;
 }

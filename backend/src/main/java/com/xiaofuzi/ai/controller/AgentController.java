@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xiaofuzi.ai.context.DepartmentContextHolder;
 import com.xiaofuzi.ai.context.UserContext;
 import com.xiaofuzi.ai.dto.ContentChatRequest;
+import com.xiaofuzi.ai.dto.VersionOverride;
 import com.xiaofuzi.ai.dto.SessionSummary;
 import com.xiaofuzi.ai.entity.ChatHistory;
 import com.xiaofuzi.ai.entity.ChatSession;
@@ -78,6 +79,15 @@ public class AgentController {
 
         sseExecutor.execute(() -> {
             DepartmentContextHolder.set(request.getDepartment());
+            // Parse version overrides from request
+            List<VersionOverride> versionOverrides = null;
+            if (request.getVersionOverrides() != null && !request.getVersionOverrides().isEmpty()) {
+                versionOverrides = request.getVersionOverrides().stream()
+                        .map(m -> new VersionOverride(
+                                String.valueOf(m.get("group_id")),
+                                (String) m.get("version")))
+                        .collect(Collectors.toList());
+            }
             try {
                 // 使用 ObjectMapper 显式序列化为 JSON，避免 SseEmitter 内部 toString() 问题
                 String thinkingJson = objectMapper.writeValueAsString(
@@ -93,6 +103,15 @@ public class AgentController {
                     String searchJson = objectMapper.writeValueAsString(
                             Map.of("type", "search_info", "content", searchInfo));
                     emitter.send(SseEmitter.event().name("search_info").data(searchJson));
+                }
+
+                // 推送版本追溯信息给前端
+                List<Map<String, Object>> versionInfo = ragQaAgentService.buildVersionInfo(
+                        userMessage, request.getDepartment(), versionOverrides);
+                if (!versionInfo.isEmpty()) {
+                    String versionJson = objectMapper.writeValueAsString(
+                            Map.of("type", "version_info", "content", Map.of("items", versionInfo)));
+                    emitter.send(SseEmitter.event().name("version_info").data(versionJson));
                 }
 
                 // 按句拆分逐句发送
