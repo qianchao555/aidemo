@@ -51,5 +51,11 @@ public class DataInitializer implements ApplicationRunner {
             chatUserMapper.updateRole(admin.getId(), "admin");
             logger.info("已将 {} 的角色设置为 admin", DEFAULT_ADMIN);
         }
+
+        // 3. 确保 zhangsan 有默认部门
+        if (admin != null && admin.getDepartment() == null) {
+            chatUserMapper.updateDepartment(admin.getId(), "全公司");
+            logger.info("已将 {} 的部门设置为 全公司", DEFAULT_ADMIN);
+        }
     }
 }

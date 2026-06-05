@@ -23,4 +23,6 @@ public interface ChatHistoryMapper {
     List<ChatHistory> findAllThreadIds();
 
     List<Map<String, Object>> findUserQueryFrequencies();
+
+    void updateRating(@Param("id") Long id, @Param("rating") Integer rating);
 }

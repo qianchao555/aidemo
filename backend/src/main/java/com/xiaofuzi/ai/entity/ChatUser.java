@@ -26,4 +26,6 @@ public class ChatUser {
     private String authToken;
 
     private String role;
+
+    private String department;
 }

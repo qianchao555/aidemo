@@ -34,4 +34,6 @@ public class FaqEntry {
     private LocalDateTime createTime;
 
     private LocalDateTime updateTime;
+
+    private LocalDateTime lastHitTime;
 }

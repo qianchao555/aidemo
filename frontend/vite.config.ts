@@ -10,8 +10,24 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/agent': 'http://localhost:18989',
-      '/faq': 'http://localhost:18989',
+      '/agent': {
+        target: 'http://localhost:18989',
+        bypass(req) {
+          // SPA 页面路由（如 /agent/chat）不走代理
+          if (req.url && !/^\/agent\/(rag-qa|sessions)/.test(req.url)) {
+            return '/index.html'
+          }
+        }
+      },
+      '/faq': {
+        target: 'http://localhost:18989',
+        bypass(req) {
+          // SPA 页面路由不走代理，回退到 index.html
+          if (req.url && !/^\/faq\/(faq|create-faq)/.test(req.url)) {
+            return '/index.html'
+          }
+        }
+      },
       '/knowledge-base': 'http://localhost:18989',
       '/user': 'http://localhost:18989',
       '/auth': 'http://localhost:18989'

@@ -1,0 +1,2 @@
+-- 聊天记录添加评分字段
+ALTER TABLE chat_history ADD COLUMN IF NOT EXISTS rating SMALLINT DEFAULT NULL;

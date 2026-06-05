@@ -1,6 +1,7 @@
 package com.xiaofuzi.ai.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xiaofuzi.ai.context.DepartmentContextHolder;
 import com.xiaofuzi.ai.context.UserContext;
 import com.xiaofuzi.ai.dto.ContentChatRequest;
 import com.xiaofuzi.ai.dto.SessionSummary;
@@ -54,8 +55,13 @@ public class AgentController {
         String message = contentChatRequest.getUserMessage();
         String threadId = contentChatRequest.getThreadId();
         Long userId = UserContext.get().getId();
-        String response = ragQaAgentService.ask(threadId, userId, message);
-        return Result.success(response);
+        DepartmentContextHolder.set(contentChatRequest.getDepartment());
+        try {
+            String response = ragQaAgentService.ask(threadId, userId, message);
+            return Result.success(response);
+        } finally {
+            DepartmentContextHolder.clear();
+        }
     }
 
     @PostMapping(value = "/rag-qa/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -71,6 +77,7 @@ public class AgentController {
         final Long finalUserId = UserContext.get().getId();
 
         sseExecutor.execute(() -> {
+            DepartmentContextHolder.set(request.getDepartment());
             try {
                 // 使用 ObjectMapper 显式序列化为 JSON，避免 SseEmitter 内部 toString() 问题
                 String thinkingJson = objectMapper.writeValueAsString(
@@ -109,10 +116,24 @@ public class AgentController {
                     emitter.send(SseEmitter.event().name("error").data(errorJson));
                 } catch (Exception ignored) {}
                 emitter.completeWithError(e);
+            } finally {
+                DepartmentContextHolder.clear();
             }
         });
 
         return emitter;
+    }
+
+    @PostMapping("/sessions/{messageId}/feedback")
+    public Result<Void> submitFeedback(@PathVariable Long messageId, @RequestBody Map<String, Integer> body) {
+        Integer rating = body.get("rating");
+        if (rating == null || (rating != 1 && rating != -1 && rating != 0)) {
+            return Result.error("rating 必须为 1（赞）、-1（踩）或 0（取消）");
+        }
+        Integer dbRating = rating == 0 ? null : rating;
+        chatHistoryMapper.updateRating(messageId, dbRating);
+        logger.info("反馈提交: messageId={}, rating={}", messageId, rating);
+        return Result.success();
     }
 
     @PostMapping("/sessions")

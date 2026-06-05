@@ -8,9 +8,42 @@ export interface FaqEntry {
   sourceDoc?: string
   headingPath?: string
   hitCount?: number
+  lastHitTime?: string
   status?: string
   createTime?: string
   updateTime?: string
+}
+
+export interface FaqListParams {
+  category?: string
+  status?: string
+  keyword?: string
+  sortBy?: string
+  sortOrder?: string
+  page?: number
+  size?: number
+}
+
+export interface FaqStats {
+  totalFaq: number
+  totalHits: number
+  todayHits: number
+}
+
+export interface FaqTrendItem {
+  day: string
+  cnt: number
+}
+
+export interface FaqCategoryDistItem {
+  category: string
+  total_hits: number
+}
+
+export interface SimilarFaqItem {
+  id: number
+  question: string
+  similarity: number
 }
 
 /** 聊天消息 */
@@ -20,6 +53,7 @@ export interface ChatMessage {
   content: string
   timestamp: number
   sources?: MessageSource[]
+  rating?: number
 }
 
 /** 聊天会话 */
@@ -97,6 +131,7 @@ export interface ChatHistoryDto {
   sourceDoc?: string
   headingPath?: string
   createTime: string
+  rating?: number
 }
 
 /** 知识库统计 */
@@ -119,6 +154,7 @@ export interface ChatUser {
   username: string
   displayName: string
   role?: string
+  department?: string
 }
 
 /** 登录请求 */
@@ -133,6 +169,7 @@ export interface LoginResponse {
   username: string
   displayName: string
   role: string
+  department?: string
   token: string
 }
 

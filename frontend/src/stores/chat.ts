@@ -36,7 +36,8 @@ export const useChatStore = defineStore('chat', () => {
           role: h.role,
           content: h.content,
           timestamp: new Date(h.createTime).getTime(),
-          sources: extractSources(h.content)
+          sources: extractSources(h.content),
+          rating: h.rating
         }))
       } catch {
         messages.value[threadId] = []

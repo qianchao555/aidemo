@@ -1,7 +1,12 @@
-/// <reference types="vite/client" />
-
-declare module '*.vue' {
-  import type { DefineComponent } from 'vue'
-  const component: DefineComponent<object, object, unknown>
-  export default component
+declare module '@kangc/v-md-editor' {
+  const VMdEditor: any
+  export default VMdEditor
 }
+
+declare module '@kangc/v-md-editor/lib/theme/github.js' {
+  const githubTheme: any
+  export default githubTheme
+}
+
+declare module '@kangc/v-md-editor/lib/style/base-editor.css'
+declare module '@kangc/v-md-editor/lib/theme/style/github.css'

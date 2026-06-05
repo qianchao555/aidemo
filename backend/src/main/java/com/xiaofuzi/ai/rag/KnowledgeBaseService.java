@@ -75,7 +75,7 @@ public class KnowledgeBaseService {
     }
 
     public void ingestMultipartFile(MultipartFile file, String parserCategory,
-            String category, String description) {
+            String category, String description, String department) {
         String fileName = file.getOriginalFilename();
         if (fileName == null || fileName.isBlank()) {
             throw new IllegalArgumentException("文件名不能为空");
@@ -93,6 +93,7 @@ public class KnowledgeBaseService {
                 .description(description)
                 .version("1.0")
                 .status("active")
+                .department(department)
                 .build();
         documentMapper.insert(doc);
 
@@ -107,6 +108,9 @@ public class KnowledgeBaseService {
             // 将前端传入的文档类别透传到切分层，用于精确路由切分策略
             if (category != null && !category.isBlank()) {
                 sharedMeta.put("document_category", category);
+            }
+            if (department != null && !department.isBlank()) {
+                sharedMeta.put("department", department);
             }
             ingestParsedDocuments(parsedDocs, sharedMeta, doc.getId());
 
@@ -353,19 +357,22 @@ public class KnowledgeBaseService {
      *         "keywordCount"-> int 关键词检索命中数
      *         "mergedCount" -> int 融合后最终条数
      */
-    public Map<String, Object> hybridSearch(String query, int topK, double similarityThreshold) {
+    public Map<String, Object> hybridSearch(String query, int topK, double similarityThreshold, String department) {
         // 1. 向量语义检索（用双倍 topK 扩大候选池，提高 RRF 融合质量）
         //    排除 FAQ 条目：FAQ 走前置精确匹配，不应混入文档检索结果
-        List<Document> vectorResults = vectorStore.similaritySearch(
-                SearchRequest.builder()
-                        .query(query)
-                        .topK(topK * 2)
-                        .similarityThreshold(similarityThreshold)
-                        .build());
+        //    部门过滤：指定部门时在向量检索阶段按 metadata.department 过滤
+        SearchRequest.Builder vectorReq = SearchRequest.builder()
+                .query(query)
+                .topK(topK * 2)
+                .similarityThreshold(similarityThreshold);
+        if (department != null && !department.isBlank()) {
+            vectorReq.filterExpression("department == '" + department.replace("'", "''") + "'");
+        }
+        List<Document> vectorResults = vectorStore.similaritySearch(vectorReq.build());
         vectorResults = filterNonFaq(vectorResults);
 
         // 2. 关键词模糊检索（pg_trgm 三元组，中文适用：按字符三元组切分后匹配）
-        List<Document> keywordResults = keywordSearch(query, topK * 2);
+        List<Document> keywordResults = keywordSearch(query, topK * 2, department);
         keywordResults = filterNonFaq(keywordResults);
 
         // 3. RRF 融合排序
@@ -459,23 +466,37 @@ public class KnowledgeBaseService {
      * content % query 利用 GIN 索引快速筛选候选，similarity() 计算精确相似度用于排序。
      */
     private List<Document> keywordSearch(String query, int limit) {
+        return keywordSearch(query, limit, null);
+    }
+
+    private List<Document> keywordSearch(String query, int limit, String department) {
         try {
-            // FAQ 条目有 content_type='faq_entry' 标记，检索时排除，避免污染文档搜索结果
-            String sql = String.format(
-                    "SELECT id, content, metadata, similarity(content, ?) AS keyword_score "
-                    + "FROM %s WHERE content %% ?"
-                    + " AND (metadata->>'content_type' IS DISTINCT FROM 'faq_entry')"
-                    + " ORDER BY keyword_score DESC LIMIT ?",
-                    qualifiedTable());
-            return vectorJdbcTemplate.query(sql,
+            StringBuilder sqlBuilder = new StringBuilder();
+            sqlBuilder.append(String.format(
+                "SELECT id, content, metadata, similarity(content, ?) AS keyword_score "
+                + "FROM %s WHERE content %% ?"
+                + " AND (metadata->>'content_type' IS DISTINCT FROM 'faq_entry')",
+                qualifiedTable()));
+
+            if (department != null && !department.isBlank()) {
+                sqlBuilder.append(" AND (metadata->>'department') = ?");
+            }
+
+            sqlBuilder.append(" ORDER BY keyword_score DESC LIMIT ?");
+
+            return vectorJdbcTemplate.query(sqlBuilder.toString(),
                     ps -> {
-                        ps.setString(1, query);
-                        ps.setString(2, query);
-                        ps.setInt(3, limit);
+                        int idx = 1;
+                        ps.setString(idx++, query);
+                        ps.setString(idx++, query);
+                        if (department != null && !department.isBlank()) {
+                            ps.setString(idx++, department);
+                        }
+                        ps.setInt(idx, limit);
                     },
                     (rs, rowNum) -> rowToDocument(rs));
         } catch (Exception e) {
-            logger.warn("关键词检索失败（pg_trgm 扩展可能未安装）: {}", e.getMessage());
+            logger.warn("关键词检索失败: {}", e.getMessage());
             return List.of();
         }
     }

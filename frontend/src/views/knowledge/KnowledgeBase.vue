@@ -1,53 +1,144 @@
 <template>
   <div class="kb-page">
-    <div class="kb-page-header">
-      <h2 class="kb-page-title">知识库管理</h2>
-      <p class="kb-page-subtitle">管理文档、上传文件、搜索知识</p>
+    <!-- Header -->
+    <div class="kb-header">
+      <div class="kb-header-left">
+        <h1>知识库管理</h1>
+        <p>上传文档、管理知识库内容</p>
+      </div>
+      <el-button type="primary" @click="openUploadDialog">+ 上传文档</el-button>
     </div>
 
-    <div class="stats-row">
-      <div class="stat-card">
-        <div class="stat-card-label">文档总数</div>
-        <div class="stat-card-value">{{ store.docCount }}</div>
+    <!-- Toolbar -->
+    <div class="kb-toolbar">
+      <div class="kb-toolbar-left">
+        <el-input
+          v-model="searchKeyword"
+          placeholder="搜索文档名称..."
+          clearable
+          size="small"
+          style="width: 200px"
+          :prefix-icon="Search"
+          @change="onSearch"
+          @clear="onSearch"
+        />
+        <el-select v-model="filterCategory" placeholder="全部分类" clearable size="small" style="width: 120px; margin-left: 8px" @change="fetchPage(1)">
+          <el-option label="请假" value="请假" />
+          <el-option label="考勤" value="考勤" />
+          <el-option label="报销" value="报销" />
+          <el-option label="入职" value="入职" />
+          <el-option label="离职" value="离职" />
+          <el-option label="转正" value="转正" />
+        </el-select>
+        <el-select v-model="filterStatus" placeholder="全部状态" clearable size="small" style="width: 110px; margin-left: 8px" @change="fetchPage(1)">
+          <el-option label="活跃" value="active" />
+          <el-option label="已删除" value="deleted" />
+        </el-select>
+        <el-select v-model="filterDepartment" placeholder="全部部门" clearable size="small"
+          style="width: 110px; margin-left: 8px" @change="fetchPage(1)">
+          <el-option v-for="dept in DEPARTMENTS" :key="dept" :label="dept" :value="dept" />
+        </el-select>
       </div>
-      <div class="stat-card">
-        <div class="stat-card-label">向量分块总数</div>
-        <div class="stat-card-value">{{ store.chunkCount }}</div>
-      </div>
-      <div class="stat-card" v-if="Object.keys(store.categoryStats).length > 0">
-        <div class="stat-card-label">分类统计</div>
-        <div class="stat-card-tags">
-          <el-tag v-for="(cnt, cat) in store.categoryStats" :key="cat" size="small" type="primary" style="margin-right: 4px">{{ cat }}: {{ cnt }}</el-tag>
-        </div>
+      <div class="kb-toolbar-right">
+        <span class="kb-summary">共 {{ store.documentTotal }} 条记录</span>
+        <el-button size="small" @click="handleRefresh">刷新</el-button>
       </div>
     </div>
 
-    <div class="kb-card">
-      <div class="kb-card-header">文件上传</div>
-      <div class="kb-card-body">
-        <div class="upload-options">
-          <div class="upload-option">
-            <label class="upload-label">文档类型</label>
-            <el-select v-model="uploadCategory" placeholder="选择文档类型" style="width: 180px" size="default">
+    <!-- Table -->
+    <div class="kb-table-section">
+      <el-table
+        :data="store.documentList"
+        v-loading="store.documentLoading"
+        stripe
+        style="width: 100%"
+        @sort-change="onSortChange"
+      >
+        <el-table-column label="文档名称" show-overflow-tooltip sortable="custom" prop="documentName">
+          <template #default="{ row }">
+            <span class="doc-name" @click="openDetail(row)">{{ row.documentName }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="documentType" label="类型" sortable="custom" />
+        <el-table-column prop="category" label="分类" sortable="custom">
+          <template #default="{ row }">
+            <el-tag v-if="row.category" size="small" type="primary">{{ row.category }}</el-tag>
+            <span v-else class="text-muted">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="department" label="部门" width="100" sortable="custom">
+          <template #default="{ row }">
+            <el-tag v-if="row.department" size="small" :type="departmentTagType(row.department)" effect="plain">
+              {{ row.department }}
+            </el-tag>
+            <span v-else class="text-muted">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="chunkCount" label="分块" sortable="custom" />
+        <el-table-column prop="status" label="状态" sortable="custom">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 'active' ? 'success' : 'info'" size="small">
+              {{ row.status || '-' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="createTime" label="摄入时间" sortable="custom" />
+        <el-table-column label="操作" fixed="right">
+          <template #default="{ row }">
+            <el-button class="detail-link" link size="small" @click="openDetail(row)">详情</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <el-empty v-if="!store.documentLoading && store.documentList.length === 0" description="暂无文档" :image-size="60" />
+
+      <!-- Pagination -->
+      <div class="kb-pagination">
+        <el-pagination
+          v-model:current-page="currentPage"
+          :page-size="pageSize"
+          :page-sizes="[5, 10, 20, 50]"
+          :total="store.documentTotal"
+          layout="total, sizes, prev, pager, next"
+          size="small"
+          @current-change="fetchPage"
+          @size-change="onSizeChange"
+        />
+      </div>
+    </div>
+
+    <!-- Upload Dialog -->
+    <el-dialog v-model="uploadDialogVisible" title="上传文档" width="520px" :close-on-click-modal="false">
+      <div class="upload-dialog-body">
+        <div class="upload-form-row">
+          <div class="upload-form-field">
+            <label class="upload-form-label">文档类型</label>
+            <el-select v-model="uploadCategory" placeholder="自动检测" style="width: 100%">
               <el-option label="制度文档" value="制度" />
               <el-option label="流程文档" value="流程" />
               <el-option label="FAQ文档" value="FAQ" />
               <el-option label="自动检测" value="" />
             </el-select>
           </div>
-          <div class="upload-option">
-            <label class="upload-label">解析器</label>
-            <el-select v-model="uploadParserCategory" placeholder="可自动检测" clearable style="width: 180px" size="default">
+          <div class="upload-form-field">
+            <label class="upload-form-label">解析器</label>
+            <el-select v-model="uploadParserCategory" placeholder="自动检测" clearable style="width: 100%">
               <el-option label="PDF" value="pdf" />
               <el-option label="Word" value="word" />
               <el-option label="TXT" value="txt" />
               <el-option label="Markdown" value="markdown" />
             </el-select>
           </div>
-          <div class="upload-option upload-option-desc">
-            <label class="upload-label">描述</label>
-            <el-input v-model="uploadDescription" placeholder="可选，简要描述文档内容" style="width: 260px" />
-          </div>
+        </div>
+        <div class="upload-form-field" style="margin-bottom: 14px">
+          <label class="upload-form-label">部门 <span style="color:#E87040">*</span></label>
+          <el-select v-model="uploadDepartment" placeholder="请选择部门" style="width: 100%">
+            <el-option v-for="dept in DEPARTMENTS" :key="dept" :label="dept" :value="dept" />
+          </el-select>
+        </div>
+        <div class="upload-form-field" style="margin-bottom: 14px">
+          <label class="upload-form-label">描述（可选）</label>
+          <el-input v-model="uploadDescription" placeholder="简要描述文档内容" />
         </div>
         <el-upload
           ref="uploadRef"
@@ -57,192 +148,212 @@
           :on-remove="() => uploadFile = null"
           accept=".pdf,.doc,.docx,.txt,.md"
           drag
-          class="styled-upload"
+          class="upload-dialog-drop"
         >
-          <el-icon class="el-icon--upload" :size="28" color="#ccc"><UploadFilled /></el-icon>
-          <div class="el-upload__text">拖拽文件到此处 或 <em>点击上传</em></div>
-          <div class="el-upload__hint">支持 PDF、Word、TXT、Markdown</div>
+          <el-icon class="el-icon--upload" :size="32" color="#C8C4C0"><UploadFilled /></el-icon>
+          <div class="el-upload__text">拖拽文件到此处，或点击选择</div>
+          <div class="el-upload__hint">支持 PDF / Word / TXT / Markdown</div>
         </el-upload>
-        <el-button type="primary" :loading="store.loading" :disabled="!uploadFile" @click="handleUpload" style="margin-top: 12px">
+      </div>
+      <template #footer>
+        <el-button @click="uploadDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="store.loading" :disabled="!uploadFile" @click="handleUpload">
           上传并摄入
         </el-button>
-      </div>
-    </div>
+      </template>
+    </el-dialog>
 
-    <div class="kb-card">
-      <div class="kb-card-header">
-        <span>文档列表</span>
-        <div class="kb-card-header-actions">
-          <el-select v-model="docFilterCategory" placeholder="按分类筛选" clearable size="small" style="width: 140px" @change="handleFetchDocuments">
-            <el-option label="请假" value="请假" />
-            <el-option label="考勤" value="考勤" />
-            <el-option label="报销" value="报销" />
-            <el-option label="入职" value="入职" />
-            <el-option label="离职" value="离职" />
-            <el-option label="转正" value="转正" />
-          </el-select>
-          <el-select v-model="docFilterStatus" placeholder="按状态筛选" clearable size="small" style="width: 120px; margin-left: 8px" @change="handleFetchDocuments">
-            <el-option label="活跃" value="active" />
-            <el-option label="已删除" value="deleted" />
-          </el-select>
-          <el-button size="small" @click="handleRefreshDocuments" style="margin-left: 8px">刷新</el-button>
-        </div>
-      </div>
-      <div class="kb-card-body" style="padding-top: 0">
-        <el-table :data="store.documentList" v-loading="store.documentLoading" stripe style="width: 100%">
-          <el-table-column prop="id" label="ID" width="60" />
-          <el-table-column prop="documentName" label="文档名称" min-width="180" show-overflow-tooltip />
-          <el-table-column prop="documentType" label="类型" width="80" />
-          <el-table-column prop="category" label="分类" width="80">
-            <template #default="{ row }">
-              <el-tag v-if="row.category" size="small" type="primary">{{ row.category }}</el-tag>
-              <span v-else>-</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="version" label="版本" width="80" />
-          <el-table-column prop="chunkCount" label="分块数" width="80" />
-          <el-table-column prop="status" label="状态" width="80">
-            <template #default="{ row }">
-              <el-tag :type="row.status === 'active' ? 'success' : 'info'" size="small">
-                {{ row.status || '-' }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="createTime" label="摄入时间" width="170" />
-          <el-table-column label="操作" width="300" fixed="right">
-            <template #default="{ row }">
-              <el-button type="primary" link size="small" @click="showDetail(row)">详情</el-button>
-              <el-button type="primary" link size="small" @click="handleReingest(row)">重新摄入</el-button>
-              <el-popconfirm title="确定删除此文档及全部向量？" @confirm="handleDeleteDoc(row.id!)">
-                <template #reference>
-                  <el-button type="danger" link size="small">删除</el-button>
-                </template>
-              </el-popconfirm>
-            </template>
-          </el-table-column>
-        </el-table>
-        <el-empty v-if="!store.documentLoading && store.documentList.length === 0" description="暂无文档" />
-
-        <el-dialog v-model="detailVisible" title="文档详情" width="560px">
-          <el-descriptions v-if="detailRow" :column="2" border>
-            <el-descriptions-item label="ID">{{ detailRow.id }}</el-descriptions-item>
-            <el-descriptions-item label="状态">
+    <!-- Detail Drawer -->
+    <el-drawer v-model="detailVisible" title="文档详情" size="440px" direction="rtl">
+      <template v-if="detailRow">
+        <div class="detail-body">
+          <div class="detail-hero">
+            <div class="detail-name">{{ detailRow.documentName }}</div>
+            <div class="detail-tags">
               <el-tag :type="detailRow.status === 'active' ? 'success' : 'info'" size="small">{{ detailRow.status || '-' }}</el-tag>
-            </el-descriptions-item>
-            <el-descriptions-item label="文档名称" :span="2">{{ detailRow.documentName }}</el-descriptions-item>
-            <el-descriptions-item label="类型">{{ detailRow.documentType }}</el-descriptions-item>
-            <el-descriptions-item label="分类">{{ detailRow.category || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="版本">{{ detailRow.version || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="分块数">{{ detailRow.chunkCount ?? '-' }}</el-descriptions-item>
-            <el-descriptions-item label="部门">{{ detailRow.department || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="生效日期">{{ detailRow.effectiveDate || '-' }}</el-descriptions-item>
-            <el-descriptions-item v-if="detailRow.description" label="描述" :span="2">{{ detailRow.description }}</el-descriptions-item>
-            <el-descriptions-item label="文件路径" :span="2">{{ detailRow.filePath || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="文件大小">{{ detailRow.fileSize ? formatFileSize(detailRow.fileSize) : '-' }}</el-descriptions-item>
-            <el-descriptions-item label="创建时间">{{ detailRow.createTime || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="更新时间" :span="2">{{ detailRow.updateTime || '-' }}</el-descriptions-item>
-          </el-descriptions>
-        </el-dialog>
+              <span class="detail-meta-text">{{ detailRow.documentType }}</span>
+              <span v-if="detailRow.fileSize" class="detail-meta-text">{{ formatFileSize(detailRow.fileSize) }}</span>
+              <span class="detail-meta-text">v{{ detailRow.version || '-' }}</span>
+              <el-tag v-if="detailRow.category" size="small" type="primary">{{ detailRow.category }}</el-tag>
+            </div>
+          </div>
 
-        <input ref="reingestFileInput" type="file" accept=".pdf,.doc,.docx,.txt,.md" style="display: none" @change="onReingestFileChange" />
-      </div>
-    </div>
+          <div v-if="detailRow.description" class="detail-desc">{{ detailRow.description }}</div>
 
-    <div class="kb-card">
-      <div class="kb-card-header">知识搜索</div>
-      <div class="kb-card-body">
-        <div class="search-row">
-          <el-input v-model="searchQuery" placeholder="输入搜索内容" style="width: 400px" @keyup.enter="handleSearch" />
-          <span class="topk-label">TopK:</span>
-          <el-input-number v-model="searchTopK" :min="1" :max="20" size="small" />
-          <el-button type="primary" :loading="store.loading" @click="handleSearch" style="margin-left: 10px">搜索</el-button>
-        </div>
-        <div v-if="store.searchResult" class="search-result">
-          <p class="result-meta">命中 {{ store.hitCount }} 条结果</p>
-          <div class="result-card">
-            <pre class="result-text">{{ store.searchResult }}</pre>
+          <div class="detail-section">
+            <div class="detail-section-title">基本信息</div>
+            <div class="detail-field">
+              <span class="detail-field-label">文档 ID</span>
+              <span class="detail-field-value">{{ detailRow.id }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="detail-field-label">部门</span>
+              <span class="detail-field-value">{{ detailRow.department || '-' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="detail-field-label">生效日期</span>
+              <span class="detail-field-value">{{ detailRow.effectiveDate || '-' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="detail-field-label">分块数</span>
+              <span class="detail-field-value">{{ detailRow.chunkCount ?? '-' }}</span>
+            </div>
+          </div>
+
+          <div class="detail-section">
+            <div class="detail-section-title">文件信息</div>
+            <div class="detail-field">
+              <span class="detail-field-label">路径</span>
+              <span class="detail-field-value" style="font-size:12px;font-family:monospace">{{ detailRow.filePath || '-' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="detail-field-label">摄入时间</span>
+              <span class="detail-field-value">{{ detailRow.createTime || '-' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="detail-field-label">更新时间</span>
+              <span class="detail-field-value">{{ detailRow.updateTime || '-' }}</span>
+            </div>
           </div>
         </div>
-      </div>
-    </div>
+
+        <div class="detail-actions">
+          <el-button style="flex:1" @click="handleReingest(detailRow); detailVisible = false">重新摄入</el-button>
+          <el-popconfirm title="确定删除此文档及全部向量？" @confirm="handleDelete(detailRow.id!); detailVisible = false">
+            <template #reference>
+              <el-button type="danger" style="flex:1">删除文档</el-button>
+            </template>
+          </el-popconfirm>
+        </div>
+      </template>
+    </el-drawer>
+
+    <input ref="reingestFileInput" type="file" accept=".pdf,.doc,.docx,.txt,.md" style="display: none" @change="onReingestFileChange" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { UploadFilled, Search } from '@element-plus/icons-vue'
 import { useKnowledgeStore } from '@/stores/knowledge-base'
+import { DEPARTMENTS } from '@/constants/departments'
 import type { KnowledgeDocument } from '@/types'
 
 const store = useKnowledgeStore()
 const uploadRef = ref()
 
-// 文件上传
+// Upload dialog
+const uploadDialogVisible = ref(false)
 const uploadFile = ref<File | null>(null)
 const uploadParserCategory = ref('')
 const uploadCategory = ref('')
 const uploadDescription = ref('')
+const filterDepartment = ref('')
+const uploadDepartment = ref(readUserDepartment())
+
+const DEPT_TAG_TYPES = ['', 'success', 'warning', 'danger', 'info'] as const
+
+function departmentTagType(dept: string): string {
+  let hash = 0
+  for (let i = 0; i < dept.length; i++) hash = ((hash << 5) - hash + dept.charCodeAt(i)) | 0
+  return DEPT_TAG_TYPES[Math.abs(hash) % DEPT_TAG_TYPES.length]
+}
+
+function readUserDepartment(): string {
+  try {
+    const raw = localStorage.getItem('currentUser')
+    const user = raw ? JSON.parse(raw) : null
+    return user?.department || '全公司'
+  } catch { return '全公司' }
+}
+
+function openUploadDialog() {
+  uploadFile.value = null
+  uploadParserCategory.value = ''
+  uploadCategory.value = ''
+  uploadDescription.value = ''
+  uploadDepartment.value = readUserDepartment()
+  uploadDialogVisible.value = true
+}
+
 function handleFileChange(file: { raw?: File }) {
   uploadFile.value = file.raw || null
 }
-function triggerUpload() {
-  uploadRef.value?.$el?.querySelector('input')?.click()
-}
+
 async function handleUpload() {
   if (!uploadFile.value) return
   await store.upload(
     uploadFile.value,
     uploadParserCategory.value || undefined,
     uploadCategory.value || undefined,
-    uploadDescription.value || undefined
+    uploadDescription.value || undefined,
+    uploadDepartment.value || undefined
   )
   ElMessage.success('文件上传摄入成功')
-  uploadFile.value = null
-  uploadCategory.value = ''
-  uploadDescription.value = ''
+  uploadDialogVisible.value = false
+  handleRefresh()
 }
 
-// 搜索
-const searchQuery = ref('')
-const searchTopK = ref(5)
-async function handleSearch() {
-  if (!searchQuery.value.trim()) {
-    ElMessage.warning('请输入搜索内容')
-    return
-  }
-  await store.search(searchQuery.value, searchTopK.value)
+// Filters & sort
+const searchKeyword = ref('')
+const filterCategory = ref('')
+const filterStatus = ref('')
+const sortBy = ref('update_time')
+const sortOrder = ref<'asc' | 'desc'>('desc')
+const currentPage = ref(1)
+const pageSize = ref(10)
+
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+function onSearch() {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => fetchPage(1), 300)
 }
 
-// 文档管理
-const docFilterCategory = ref('')
-const docFilterStatus = ref('')
-const reingestFileInput = ref<HTMLInputElement>()
-const reingestingDocId = ref<number | null>(null)
+function onSortChange({ prop, order }: { prop: string; order: string }) {
+  sortBy.value = prop || 'update_time'
+  sortOrder.value = (order === 'ascending' ? 'asc' : 'desc')
+  fetchPage(1)
+}
 
-async function handleFetchDocuments() {
-  await store.fetchDocuments({
-    category: docFilterCategory.value || undefined,
-    status: docFilterStatus.value || undefined
+function onSizeChange(size: number) {
+  pageSize.value = size
+  fetchPage(1)
+}
+
+function fetchPage(page: number) {
+  currentPage.value = page
+  store.fetchDocuments({
+    category: filterCategory.value || undefined,
+    status: filterStatus.value || undefined,
+    keyword: searchKeyword.value || undefined,
+    department: filterDepartment.value || undefined,
+    sortBy: sortBy.value,
+    sortOrder: sortOrder.value,
+    page,
+    size: pageSize.value
   })
 }
 
-async function handleRefreshDocuments() {
-  await Promise.all([store.fetchStats(), handleFetchDocuments()])
+async function handleRefresh() {
+  await store.fetchStats()
+  fetchPage(1)
 }
 
+// Reingest
+const reingestFileInput = ref<HTMLInputElement>()
+const reingestingDocId = ref<number | null>(null)
 function handleReingest(row: KnowledgeDocument) {
   reingestingDocId.value = row.id!
   reingestFileInput.value?.click()
 }
-
 async function onReingestFileChange(e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file || reingestingDocId.value == null) return
-
   try {
     await store.reingest(reingestingDocId.value, file)
-    ElMessage.success(`文档 #${reingestingDocId.value} 增量更新完成`)
+    ElMessage.success('文档增量更新完成')
   } catch {
     ElMessage.error('增量更新失败')
   } finally {
@@ -251,19 +362,21 @@ async function onReingestFileChange(e: Event) {
   }
 }
 
-async function handleDeleteDoc(id: number) {
+// Delete
+async function handleDelete(id: number) {
   try {
     await store.removeDocument(id)
     ElMessage.success('文档已删除')
+    fetchPage(currentPage.value)
   } catch {
     ElMessage.error('删除失败')
   }
 }
 
-// 文档详情
+// Detail (drawer)
 const detailVisible = ref(false)
 const detailRow = ref<KnowledgeDocument | null>(null)
-function showDetail(row: KnowledgeDocument) {
+function openDetail(row: KnowledgeDocument) {
   detailRow.value = row
   detailVisible.value = true
 }
@@ -275,192 +388,113 @@ function formatFileSize(bytes: number): string {
 
 onMounted(() => {
   store.fetchStats()
-  store.fetchDocuments({ status: docFilterStatus.value || undefined })
+  fetchPage(1)
 })
 </script>
 
 <style scoped>
 .kb-page {
-  max-width: 1100px;
-  margin: 0 auto;
-}
-
-.kb-page-header {
-  margin-bottom: 18px;
-}
-
-.kb-page-title {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0 0 4px;
-}
-
-.kb-page-subtitle {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin: 0;
-}
-
-/* Stats Row */
-.stats-row {
-  display: flex;
-  gap: 14px;
-  margin-bottom: 16px;
-}
-
-.stat-card {
-  flex: 1;
+  width: 100%;
   background: var(--white);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  padding: 14px 18px;
-  box-shadow: var(--shadow-card);
-}
-
-.stat-card-label {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-bottom: 4px;
-}
-
-.stat-card-value {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.stat-card-tags {
-  margin-top: 4px;
-}
-
-/* KB Card */
-.kb-card {
-  background: var(--white);
-  border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
-  margin-bottom: 14px;
   overflow: hidden;
 }
 
-.kb-card-header {
+/* Header */
+.kb-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 14px 18px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
+  justify-content: space-between;
+  padding: 18px 24px;
   border-bottom: 1px solid var(--border-light);
   background: var(--surface-warm);
 }
+.kb-header-left h1 { font-size: 18px; font-weight: 700; color: var(--text-primary); margin: 0; }
+.kb-header-left p { font-size: 12px; color: var(--text-muted); margin: 2px 0 0; }
 
-.kb-card-header-actions {
+/* Toolbar */
+.kb-toolbar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  padding: 10px 24px;
+  border-bottom: 1px solid var(--border-light);
 }
+.kb-toolbar-left { display: flex; align-items: center; }
+.kb-toolbar-right { display: flex; align-items: center; gap: 10px; }
+.kb-summary { font-size: 12px; color: var(--text-muted); }
 
-.kb-card-body {
-  padding: 16px 18px;
+/* Table */
+.kb-table-section { padding: 0 24px 16px; }
+/* sort caret via Element Plus CSS vars */
+.kb-table-section :deep(.el-table) {
+  --el-color-primary: #E87040;
+  --el-color-primary-light-3: #F08A60;
 }
+.doc-name { font-size: 13px; font-weight: 500; color: var(--text-primary); cursor: pointer; }
+.doc-name:hover { color: var(--primary); }
+.text-muted { color: var(--text-muted); }
 
-/* Upload */
-.upload-options {
-  display: flex;
-  gap: 20px;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
-  align-items: flex-end;
-}
+.detail-link { color: #4A8B8B !important; }
+.detail-link:hover { color: #3A7070 !important; }
 
-.upload-option {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
+/* Pagination */
+.kb-pagination { display: flex; justify-content: flex-end; padding: 12px 0 4px; }
 
-.upload-label {
-  font-size: 12px;
-  color: var(--text-muted);
-  font-weight: 500;
-}
-
-.styled-upload {
+/* Upload Dialog */
+.upload-dialog-body :deep(.el-upload) { width: 100%; }
+.upload-dialog-body :deep(.el-upload-dragger) {
   width: 100%;
-}
-
-.styled-upload :deep(.el-upload) {
-  width: 100%;
-}
-
-.styled-upload :deep(.el-upload-dragger) {
-  width: 100%;
-  border: 2px dashed #E0DCD5;
+  border: 2px dashed #D8D4CE;
   border-radius: var(--radius-md);
-  padding: 30px;
-  transition: border-color 0.15s, background 0.15s;
+  padding: 28px 20px;
+  transition: border-color 0.15s;
 }
+.upload-dialog-body :deep(.el-upload-dragger):hover { border-color: var(--primary); }
+.upload-dialog-body :deep(.el-upload__text) { color: var(--text-secondary); font-size: 13px; margin-top: 8px; }
+.upload-dialog-body :deep(.el-upload__hint) { color: var(--text-muted); font-size: 11px; margin-top: 2px; }
 
-.styled-upload :deep(.el-upload-dragger:hover) {
-  border-color: var(--primary);
-  background: rgba(232, 112, 64, 0.02);
-}
+.upload-form-row { display: flex; gap: 12px; margin-bottom: 14px; }
+.upload-form-field { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.upload-form-label { font-size: 11px; color: var(--text-muted); font-weight: 500; letter-spacing: 0.2px; }
 
-.styled-upload :deep(.el-upload__text) {
-  color: var(--text-secondary);
-  font-size: 14px;
-  margin-top: 10px;
-}
+/* Detail Drawer */
+.detail-body { padding: 0 4px; }
 
-.styled-upload :deep(.el-upload__text em) {
-  color: var(--primary);
-  font-style: normal;
-}
+.detail-hero { margin-bottom: 16px; }
+.detail-name { font-size: 16px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px; line-height: 1.4; }
+.detail-tags { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.detail-meta-text { font-size: 12px; color: var(--text-muted); }
 
-.styled-upload :deep(.el-upload__hint) {
-  color: var(--text-muted);
-  font-size: 12px;
-  margin-top: 4px;
-}
-
-/* Search */
-.search-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.topk-label {
+.detail-desc {
+  background: var(--surface-warm);
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  margin-bottom: 18px;
   font-size: 13px;
   color: var(--text-secondary);
-  margin-left: 4px;
+  line-height: 1.6;
 }
 
-.search-result {
-  margin-top: 14px;
-}
-
-.result-meta {
-  font-size: 12px;
+.detail-section { margin-bottom: 18px; }
+.detail-section-title {
+  font-size: 11px;
+  font-weight: 600;
   color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
   margin-bottom: 8px;
 }
+.detail-field { display: flex; padding: 8px 0; border-bottom: 1px solid var(--border-light); }
+.detail-field-label { width: 80px; font-size: 12px; color: var(--text-muted); flex-shrink: 0; }
+.detail-field-value { font-size: 13px; color: var(--text-primary); flex: 1; word-break: break-all; }
 
-.result-card {
-  background: var(--surface-warm);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  padding: 14px;
-  max-height: 360px;
-  overflow: auto;
-}
-
-.result-text {
-  white-space: pre-wrap;
-  font-size: 13px;
-  line-height: 1.6;
-  margin: 0;
-  color: var(--text-primary);
+.detail-actions {
+  display: flex;
+  gap: 10px;
+  padding: 14px 0 0;
+  border-top: 1px solid var(--border-light);
+  margin-top: 4px;
 }
 </style>

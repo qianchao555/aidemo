@@ -24,4 +24,6 @@ public interface ChatUserMapper {
     List<ChatUser> findByPasswordHashIsNull();
 
     void updateRole(@Param("id") Long id, @Param("role") String role);
+
+    void updateDepartment(@Param("id") Long id, @Param("department") String department);
 }

@@ -52,8 +52,42 @@
             <if test="status != null and status != ''">
                 AND status = #{status}
             </if>
+            <if test="keyword != null and keyword != ''">
+                AND document_name LIKE CONCAT('%', #{keyword}, '%')
+            </if>
+            <if test="department != null and department != ''">
+                AND department = #{department}
+            </if>
         </where>
-        ORDER BY update_time DESC
+        <choose>
+            <when test="sortBy != null and sortBy != '' and sortOrder != null and sortOrder != ''">
+                ORDER BY ${sortBy} ${sortOrder}
+            </when>
+            <otherwise>
+                ORDER BY update_time DESC
+            </otherwise>
+        </choose>
+        <if test="limit != null and limit > 0">
+            LIMIT #{limit} OFFSET #{offset}
+        </if>
+    </select>
+
+    <select id="countByFilters" resultType="long">
+        SELECT COUNT(*) FROM knowledge_document
+        <where>
+            <if test="category != null and category != ''">
+                AND category = #{category}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND document_name LIKE CONCAT('%', #{keyword}, '%')
+            </if>
+            <if test="department != null and department != ''">
+                AND department = #{department}
+            </if>
+        </where>
     </select>
 
     <update id="update" parameterType="com.xiaofuzi.ai.entity.KnowledgeDocument">

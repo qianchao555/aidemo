@@ -44,7 +44,7 @@ App.vue 是所有页面的外壳，需要从当前的宽侧边栏菜单改造为
     <!-- Top Bar -->
     <header class="top-bar">
       <div class="top-bar-left">
-        <span class="top-bar-brand">制度知识库助手</span>
+        <span class="top-bar-brand">制度问答与流程指引助手</span>
       </div>
       <div class="top-bar-right">
         <span class="top-bar-user-name">{{ displayName }}</span>
@@ -459,7 +459,7 @@ git commit -m "refactor: redesign app shell with icon sidebar, top bar, and CSS 
       <div class="login-logo">
         <div class="login-logo-icon">小</div>
       </div>
-      <h2 class="login-title">制度知识库助手</h2>
+      <h2 class="login-title">制度问答与流程指引助手</h2>
       <p class="login-subtitle">登录您的账号</p>
 
       <el-form

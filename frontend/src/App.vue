@@ -4,26 +4,35 @@
   </div>
 
   <div v-else class="app-shell">
-    <!-- Top Bar -->
-    <header class="top-bar">
-      <div class="top-bar-left">
-        <span class="top-bar-brand">制度知识库助手</span>
-      </div>
-      <div class="top-bar-right">
-        <div class="top-bar-avatar">{{ displayName.charAt(0) }}</div>
-        <span class="top-bar-user-name">{{ displayName }}</span>
-        <el-tag v-if="isAdmin" size="small" type="warning">管理员</el-tag>
-        <el-button text size="small" class="top-bar-logout" @click="handleLogout">
-          <el-icon><SwitchButton /></el-icon> 退出
-        </el-button>
-      </div>
-    </header>
-
     <div class="app-body">
       <!-- Icon Sidebar -->
-      <nav class="icon-sidebar">
-        <div class="sidebar-logo" @click="navTo('/agent/chat')" title="首页">
-          <div class="sidebar-logo-icon">小</div>
+      <nav class="icon-sidebar" :class="{ expanded: sidebarExpanded }">
+        <div class="sidebar-top" ref="deptMenuRef">
+          <div class="sidebar-logo" @click="sidebarExpanded ? deptMenuVisible = !deptMenuVisible : sidebarExpanded = true">
+            <div class="sidebar-logo-icon">Bot</div>
+            <div v-if="sidebarExpanded" class="sidebar-logo-text">
+              <span class="sidebar-logo-title">知识库助手</span>
+              <span class="sidebar-logo-sub">
+                <span class="sidebar-logo-sub-icon">🏢</span>
+                <span class="sidebar-logo-sub-name">{{ currentDepartment }}</span>
+                <span class="sidebar-logo-sub-arrow" :class="{ open: deptMenuVisible }">▼</span>
+              </span>
+            </div>
+          </div>
+          <div class="sidebar-toggle" @click.stop="sidebarExpanded = !sidebarExpanded" :title="sidebarExpanded ? '收起' : '展开'">
+            <el-icon :size="18">
+              <Fold v-if="sidebarExpanded" />
+              <Expand v-else />
+            </el-icon>
+          </div>
+
+          <div v-if="deptMenuVisible" class="dept-menu">
+            <div v-for="dept in DEPARTMENTS" :key="dept"
+              class="dept-item" :class="{ active: currentDepartment === dept }"
+              @click.stop="switchDepartment(dept); deptMenuVisible = false">
+              {{ dept }}
+            </div>
+          </div>
         </div>
 
         <div class="sidebar-nav">
@@ -34,16 +43,18 @@
             @click="navTo('/agent/chat')"
           >
             <el-icon :size="22"><ChatDotRound /></el-icon>
+            <span v-if="sidebarExpanded" class="nav-label">智能问答</span>
           </div>
 
           <template v-if="isAdmin">
             <div
               class="sidebar-nav-item"
-              :class="{ active: isActive('/faq/list') || isActive('/faq/high-freq') }"
+              :class="{ active: isActive('/faq/list') || isActive('/faq/dashboard') }"
               title="FAQ 管理"
               @click="navTo('/faq/list')"
             >
               <el-icon :size="22"><Collection /></el-icon>
+              <span v-if="sidebarExpanded" class="nav-label">FAQ 管理</span>
             </div>
 
             <div
@@ -53,13 +64,35 @@
               @click="navTo('/knowledge')"
             >
               <el-icon :size="22"><Document /></el-icon>
+              <span v-if="sidebarExpanded" class="nav-label">知识库管理</span>
             </div>
           </template>
         </div>
 
         <div class="sidebar-footer">
-          <div class="sidebar-avatar" :title="displayName">
-            {{ displayName.charAt(0) }}
+          <div class="user-menu-wrapper" ref="userMenuRef">
+            <div
+              class="sidebar-avatar-row"
+              :class="{ active: userMenuVisible }"
+              @click="userMenuVisible = !userMenuVisible"
+            >
+              <div class="sidebar-avatar">{{ displayName.charAt(0) }}</div>
+              <span v-if="sidebarExpanded" class="sidebar-user-name">{{ displayName }}</span>
+            </div>
+            <div v-if="userMenuVisible" class="user-popup">
+              <div class="user-popup-info">
+                <div class="user-popup-avatar">{{ displayName.charAt(0) }}</div>
+                <div class="user-popup-details">
+                  <div class="user-popup-name">{{ displayName }}</div>
+                  <el-tag v-if="isAdmin" size="small" type="warning">管理员</el-tag>
+                </div>
+              </div>
+              <div class="user-popup-divider"></div>
+              <div class="user-popup-action" @click="handleLogout">
+                <el-icon :size="16"><SwitchButton /></el-icon>
+                <span>退出登录</span>
+              </div>
+            </div>
           </div>
         </div>
       </nav>
@@ -73,16 +106,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ChatDotRound, Collection, Document, SwitchButton } from '@element-plus/icons-vue'
+import { ChatDotRound, Collection, Document, SwitchButton, Fold, Expand } from '@element-plus/icons-vue'
 import { authLogout } from '@/api/agent'
+import { DEPARTMENTS } from '@/constants/departments'
 
 interface UserInfo {
   id?: number
   username?: string
   displayName?: string
   role?: string
+  department?: string
 }
 
 const route = useRoute()
@@ -106,6 +141,30 @@ watch(() => route.fullPath, () => {
 
 const displayName = computed(() => currentUser.value?.displayName || '')
 const isAdmin = computed(() => currentUser.value?.role === 'admin')
+const userMenuVisible = ref(false)
+const userMenuRef = ref<HTMLElement | null>(null)
+const sidebarExpanded = ref(false)
+
+const currentDepartment = ref(localStorage.getItem('selectedDepartment') || readUserFromStorage()?.department || '全公司')
+const deptMenuVisible = ref(false)
+const deptMenuRef = ref<HTMLElement | null>(null)
+
+function switchDepartment(dept: string) {
+  currentDepartment.value = dept
+  localStorage.setItem('selectedDepartment', dept)
+}
+
+function onDocumentClick(e: MouseEvent) {
+  if (userMenuRef.value && !userMenuRef.value.contains(e.target as Node)) {
+    userMenuVisible.value = false
+  }
+  if (deptMenuRef.value && !deptMenuRef.value.contains(e.target as Node)) {
+    deptMenuVisible.value = false
+  }
+}
+
+onMounted(() => document.addEventListener('click', onDocumentClick))
+onUnmounted(() => document.removeEventListener('click', onDocumentClick))
 
 function isActive(path: string): boolean {
   return route.path === path
@@ -148,6 +207,7 @@ async function handleLogout() {
 
 /* ===== Global Reset ===== */
 * { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { overflow: hidden; height: 100%; }
 
 /* ===== Login Shell ===== */
 .login-shell {
@@ -158,66 +218,6 @@ async function handleLogout() {
 .app-shell {
   height: 100vh;
   display: flex;
-  flex-direction: column;
-}
-
-/* ===== Top Bar ===== */
-.top-bar {
-  height: 48px;
-  background: var(--white);
-  border-bottom: 1px solid var(--border-base);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 20px;
-  flex-shrink: 0;
-  z-index: 100;
-}
-
-.top-bar-left {
-  display: flex;
-  align-items: center;
-}
-
-.top-bar-brand {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-primary);
-  letter-spacing: 0.5px;
-}
-
-.top-bar-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.top-bar-avatar {
-  width: 26px;
-  height: 26px;
-  background: var(--primary);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 12px;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-
-.top-bar-user-name {
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.top-bar-logout {
-  color: var(--text-muted) !important;
-  font-size: 13px;
-}
-
-.top-bar-logout:hover {
-  color: var(--primary) !important;
 }
 
 /* ===== App Body ===== */
@@ -229,19 +229,51 @@ async function handleLogout() {
 
 /* ===== Icon Sidebar ===== */
 .icon-sidebar {
-  width: 56px;
+  width: 68px;
   background: var(--sidebar-bg);
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 8px 0;
+  padding: 10px 0;
   flex-shrink: 0;
   z-index: 90;
+  transition: width 0.2s ease;
+  overflow: visible;
+}
+
+.icon-sidebar.expanded {
+  width: 220px;
+  align-items: stretch;
+  padding: 10px 12px;
+}
+
+/* Sidebar top: logo + toggle */
+.sidebar-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 0 4px;
+  overflow: visible;
+  position: relative;
+}
+
+.icon-sidebar:not(.expanded) .sidebar-top {
+  justify-content: center;
 }
 
 .sidebar-logo {
-  margin-bottom: 16px;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: var(--radius-md);
+  padding: 2px 6px;
+  margin: -2px -6px;
+  transition: background 0.15s;
+}
+.sidebar-logo:hover {
+  background: rgba(255,255,255,0.04);
 }
 
 .sidebar-logo-icon {
@@ -255,14 +287,82 @@ async function handleLogout() {
   color: white;
   font-size: 16px;
   font-weight: 700;
+  flex-shrink: 0;
 }
 
+.sidebar-logo-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+}
+
+.sidebar-logo-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: white;
+  white-space: nowrap;
+}
+
+.sidebar-logo-sub {
+  font-size: 11px;
+  color: #999;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.sidebar-logo-sub-icon {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.sidebar-logo-sub-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sidebar-logo-sub-arrow {
+  font-size: 7px;
+  color: rgba(255,255,255,0.25);
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+.sidebar-logo:hover .sidebar-logo-sub-arrow {
+  color: rgba(255,255,255,0.45);
+}
+.sidebar-logo-sub-arrow.open {
+  color: rgba(255,255,255,0.45);
+}
+
+.sidebar-toggle {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #888;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.sidebar-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #bbb;
+}
+
+/* Nav items */
 .sidebar-nav {
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
+  overflow: hidden;
+}
+
+.icon-sidebar.expanded .sidebar-nav {
+  align-items: stretch;
 }
 
 .sidebar-nav-item {
@@ -275,6 +375,15 @@ async function handleLogout() {
   color: #888;
   cursor: pointer;
   transition: all 0.15s;
+  gap: 0;
+}
+
+.icon-sidebar.expanded .sidebar-nav-item {
+  width: 100%;
+  height: 40px;
+  justify-content: flex-start;
+  padding: 0 8px;
+  gap: 12px;
 }
 
 .sidebar-nav-item:hover {
@@ -287,29 +396,170 @@ async function handleLogout() {
   color: var(--primary);
 }
 
+.nav-label {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Department dropdown menu */
+.dept-menu {
+  position: absolute;
+  top: 100%;
+  left: 4px;
+  min-width: 180px;
+  background: var(--white);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  border: 1px solid var(--border-light);
+  z-index: 100;
+  padding: 4px 0;
+}
+.dept-item {
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.1s;
+}
+.dept-item:hover { color: var(--text-primary); background: var(--surface-warm); }
+.dept-item.active { color: var(--primary); background: rgba(232,112,64,0.06); font-weight: 600; }
+
+/* Footer / user area */
 .sidebar-footer {
   padding-top: 8px;
+  position: relative;
+  overflow: visible;
+}
+
+.icon-sidebar.expanded .sidebar-footer {
+  align-self: stretch;
+}
+
+.sidebar-avatar-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-md);
+  transition: background 0.15s;
+}
+
+.icon-sidebar.expanded .sidebar-avatar-row {
+  justify-content: flex-start;
+  padding: 6px 8px;
+}
+
+.sidebar-avatar-row:hover {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .sidebar-avatar {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   background: var(--primary);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
+  font-size: 14px;
+  font-weight: 700;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+
+.sidebar-avatar-row.active .sidebar-avatar {
+  opacity: 0.85;
+}
+
+.sidebar-user-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #ccc;
+  white-space: nowrap;
+}
+
+/* User Popup (ChatGPT-style) */
+.user-menu-wrapper {
+  position: relative;
+}
+
+.user-popup {
+  position: absolute;
+  bottom: 46px;
+  left: 4px;
+  width: 200px;
+  background: var(--white);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--border-light);
+  overflow: hidden;
+  z-index: 1000;
+}
+
+.user-popup-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.user-popup-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 13px;
   font-weight: 700;
-  cursor: default;
+  flex-shrink: 0;
+}
+
+.user-popup-details {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.user-popup-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.user-popup-divider {
+  height: 1px;
+  background: var(--border-light);
+}
+
+.user-popup-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.user-popup-action:hover {
+  background: var(--surface-warm);
+  color: var(--primary);
 }
 
 /* ===== Main Content ===== */
 .main-content {
   flex: 1;
   background: var(--page-bg);
-  padding: 16px 20px;
+  padding: 24px 20px 16px;
   overflow-y: auto;
 }
 

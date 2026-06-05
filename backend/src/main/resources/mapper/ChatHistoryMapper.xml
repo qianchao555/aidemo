@@ -11,6 +11,7 @@
         <result property="sourceDoc" column="source_doc"/>
         <result property="headingPath" column="heading_path"/>
         <result property="createTime" column="create_time"/>
+        <result property="rating" column="rating"/>
     </resultMap>
 
     <insert id="insert" parameterType="com.xiaofuzi.ai.entity.ChatHistory"
@@ -40,6 +41,10 @@
         SELECT DISTINCT ON (thread_id) * FROM chat_history
         ORDER BY thread_id, create_time DESC
     </select>
+
+    <update id="updateRating">
+        UPDATE chat_history SET rating = #{rating} WHERE id = #{id}
+    </update>
 
     <select id="findUserQueryFrequencies" resultType="java.util.HashMap">
         SELECT TRIM(content) AS query, COUNT(*) AS cnt

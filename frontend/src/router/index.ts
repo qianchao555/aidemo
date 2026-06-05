@@ -35,10 +35,10 @@ const router = createRouter({
       meta: { title: 'FAQ 列表', roles: ['admin'] }
     },
     {
-      path: '/faq/high-freq',
-      name: 'HighFreqFaq',
-      component: () => import('@/views/faq/HighFreqFaq.vue'),
-      meta: { title: '高频 FAQ', roles: ['admin'] }
+      path: '/faq/dashboard',
+      name: 'FaqDashboard',
+      component: () => import('@/views/faq/FaqDashboard.vue'),
+      meta: { title: 'FAQ 统计看板', roles: ['admin'] }
     },
     {
       path: '/knowledge',

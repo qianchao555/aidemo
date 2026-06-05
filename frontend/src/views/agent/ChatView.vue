@@ -71,57 +71,60 @@
           >
             <div class="message-bubble" :class="msg.role">
               <div class="message-content" v-html="renderContent(msg.content)" />
-
-              <div v-if="msg.role === 'assistant' && msg.sources?.length" class="citation-trigger">
-                <el-popover placement="right" :width="380" trigger="click">
-                  <template #reference>
-                    <el-button size="small" text type="primary" :icon="Document" class="citation-btn">
-                      引用出处 ({{ msg.sources.length }})
-                    </el-button>
-                  </template>
-                  <div class="popover-content">
-                    <template v-if="searchInfoMap[msg.id]">
-                      <div class="popover-section">
-                        <div class="popover-section-title">检索方式</div>
-                        <el-tag
-                          :type="searchInfoMap[msg.id].searchMode === 'hybrid' ? 'success' : 'info'"
-                          size="small"
-                        >
-                          {{ searchInfoMap[msg.id].searchMode === 'hybrid' ? '混合检索 (向量 + 关键词)' : '向量检索' }}
-                        </el-tag>
-                        <div class="popover-stats" style="margin-top: 6px">
-                          <div class="stat-row">
-                            <span class="stat-label">向量命中</span>
-                            <span class="stat-value">{{ searchInfoMap[msg.id].vectorCount }} 条</span>
-                          </div>
-                          <div class="stat-row">
-                            <span class="stat-label">关键词命中</span>
-                            <span class="stat-value">{{ searchInfoMap[msg.id].keywordCount }} 条</span>
-                          </div>
-                          <div class="stat-row">
-                            <span class="stat-label">RRF 融合后</span>
-                            <span class="stat-value stat-emphasis">{{ searchInfoMap[msg.id].mergedCount }} 条</span>
-                          </div>
-                          <div v-if="searchInfoMap[msg.id].intent" class="stat-row">
-                            <span class="stat-label">识别意图</span>
-                            <span class="stat-value">{{ searchInfoMap[msg.id].intent }}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </template>
-                    <div :class="searchInfoMap[msg.id] ? 'popover-section' : ''">
-                      <div class="popover-section-title">引用来源</div>
-                      <div v-for="(src, si) in msg.sources" :key="si" class="citation-item">
-                        <span class="citation-index">{{ si + 1 }}.</span>
-                        <span class="citation-doc">{{ src.document }}</span>
-                        <span v-if="src.clause" class="citation-clause">{{ src.clause }}</span>
-                      </div>
-                    </div>
-                  </div>
-                </el-popover>
+              <div v-if="msg.role === 'assistant'" class="message-actions">
+                <button class="action-btn" title="复制" @click="copyMessage(msg)">
+                  <el-icon :size="17"><CopyDocument /></el-icon>
+                </button>
+                <button
+                  class="feedback-btn"
+                  :class="{ active: msg.rating === 1 }"
+                  title="有帮助"
+                  @click="rateMessage(msg, 1)"
+                >
+                  <img :src="msg.rating === 1 ? thumbUpBlack : thumbUpWhite" alt="有帮助" width="18" height="18" />
+                </button>
+                <button
+                  class="feedback-btn"
+                  :class="{ active: msg.rating === -1 }"
+                  title="无帮助"
+                  @click="rateMessage(msg, -1)"
+                >
+                  <img :src="msg.rating === -1 ? thumbDownBlack : thumbDownWhite" alt="无帮助" width="18" height="18" />
+                </button>
+                <button
+                  v-if="msg.sources?.length"
+                  class="action-btn citation-toggle"
+                  :class="{ active: expandedCitations.has(msg.id) }"
+                  @click="toggleCitation(msg.id)"
+                >
+                  引用出处 {{ msg.sources.length }}
+                </button>
               </div>
-
-              <div class="message-time">{{ formatTime(msg.timestamp) }}</div>
+            </div>
+            <div v-if="msg.role === 'assistant' && msg.sources?.length && expandedCitations.has(msg.id)" class="sources-panel">
+              <div class="sources-panel-header">
+                <span class="sources-panel-title">引用出处</span>
+                <button class="sources-panel-close" @click="toggleCitation(msg.id)">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                </button>
+              </div>
+              <template v-if="searchInfoMap[msg.id]">
+                <div class="sources-search-info">
+                  <span class="sources-search-tag" :class="searchInfoMap[msg.id].searchMode">
+                    {{ searchInfoMap[msg.id].searchMode === 'hybrid' ? '混合检索' : '向量检索' }}
+                  </span>
+                  <span class="sources-search-stat">向量 {{ searchInfoMap[msg.id].vectorCount }} · 关键词 {{ searchInfoMap[msg.id].keywordCount }} · 融合 {{ searchInfoMap[msg.id].mergedCount }}</span>
+                </div>
+              </template>
+              <div class="sources-list">
+                <div v-for="(src, si) in msg.sources" :key="si" class="source-item">
+                  <span class="source-index">{{ si + 1 }}</span>
+                  <div class="source-body">
+                    <span class="source-doc">{{ src.document }}</span>
+                    <span v-if="src.clause" class="source-clause">{{ src.clause }}</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
           <div v-if="sending" class="message-row assistant">
@@ -161,9 +164,13 @@ import { ref, watch, nextTick, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { marked } from 'marked'
 import { ElMessage } from 'element-plus'
-import { Delete, Expand, Fold, Plus, Document, Promotion, Loading, ChatDotRound } from '@element-plus/icons-vue'
+import { Delete, Expand, Fold, Plus, CopyDocument, Promotion, Loading, ChatDotRound } from '@element-plus/icons-vue'
 import { useChatStore } from '@/stores/chat'
-import { ragQaChat, ragQaChatStream } from '@/api/agent'
+import { ragQaChat, ragQaChatStream, submitFeedback } from '@/api/agent'
+import thumbUpWhite from '@/assets/icons/点赞-白.svg'
+import thumbUpBlack from '@/assets/icons/点赞-黑.svg'
+import thumbDownWhite from '@/assets/icons/点踩-白.svg'
+import thumbDownBlack from '@/assets/icons/点踩-黑.svg'
 
 const chatStore = useChatStore()
 const route = useRoute()
@@ -183,6 +190,8 @@ interface SearchInfo {
 }
 /** 每条消息对应的检索元信息，流式模式下收到 search_info 事件后写入 */
 const searchInfoMap = ref<Record<string, SearchInfo>>({})
+/** 展开的引用出处面板的消息 ID 集合 */
+const expandedCitations = ref<Set<string>>(new Set())
 
 const exampleQuestions = [
   '年假怎么申请？',
@@ -237,7 +246,8 @@ async function handleSend() {
   sending.value = true
 
   try {
-    const response = await ragQaChatStream({ userMessage: text, threadId })
+    const dept = localStorage.getItem('selectedDepartment') || undefined
+    const response = await ragQaChatStream({ userMessage: text, threadId, department: dept })
 
     if (!response.ok || !response.body) {
       throw new Error('SSE not supported')
@@ -271,7 +281,7 @@ async function handleSend() {
     // 流式失败降级为非流式
     chatStore.appendContent(threadId, assistantMsgId, '')
     try {
-      const response = await ragQaChat({ userMessage: text, threadId })
+      const response = await ragQaChat({ userMessage: text, threadId, department: localStorage.getItem('selectedDepartment') || undefined })
       const msgs = chatStore.messages[threadId]
       if (msgs) {
         const msg = msgs.find(m => m.id === assistantMsgId)
@@ -333,6 +343,38 @@ function extractSourcesFromText(content: string): { document: string; clause?: s
   return sources
 }
 
+async function rateMessage(msg: { id: string; rating?: number }, rating: number) {
+  const newRating = msg.rating === rating ? 0 : rating
+  msg.rating = newRating
+  const msgId = Number(msg.id)
+  if (isNaN(msgId)) return
+  try {
+    await submitFeedback(msgId, newRating)
+  } catch {
+    ElMessage.error('反馈提交失败')
+    msg.rating = msg.rating === newRating ? undefined : msg.rating
+  }
+}
+
+function copyMessage(msg: { id: string; content: string }) {
+  const text = msg.content.replace(/【出处】.*?(\n|$)/g, '')
+  navigator.clipboard.writeText(text).then(() => {
+    ElMessage.success('已复制到剪贴板')
+  }).catch(() => {
+    ElMessage.error('复制失败')
+  })
+}
+
+function toggleCitation(msgId: string) {
+  const s = new Set(expandedCitations.value)
+  if (s.has(msgId)) {
+    s.delete(msgId)
+  } else {
+    s.add(msgId)
+  }
+  expandedCitations.value = s
+}
+
 function newChat() {
   chatStore.createSession()
 }
@@ -366,7 +408,7 @@ onMounted(async () => {
 /* ===== Chat Page Layout ===== */
 .chat-page {
   display: flex;
-  height: calc(100vh - 80px);
+  height: 100%;
   background: var(--white);
   border-radius: var(--radius-lg);
   overflow: hidden;
@@ -555,45 +597,267 @@ onMounted(async () => {
 .message-row.assistant { justify-content: flex-start; }
 
 .message-bubble {
-  max-width: 72%;
-  padding: 12px 16px;
+  max-width: 75%;
+  padding: 14px 18px;
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.7;
 }
 
 .message-bubble.user {
   background: var(--primary);
   color: white;
-  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-sm) var(--radius-lg);
+  border-radius: var(--radius-lg) var(--radius-lg) 4px var(--radius-lg);
+  width: fit-content;
+  max-width: 42%;
+  padding: 8px 12px;
 }
 
 .message-bubble.assistant {
-  background: var(--page-bg);
+  background: var(--white);
   color: var(--text-primary);
-  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-sm);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) 4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  max-width: 75%;
+  padding: 14px 18px;
 }
 
-.message-time {
+/* Actions row — inside answer bubble */
+.message-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-light);
+}
+
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 12px;
+  font-family: inherit;
+}
+.action-btn:hover {
+  background: var(--surface-warm);
+  color: var(--text-secondary);
+}
+
+.citation-toggle {
+  width: auto;
+  padding: 0 8px;
+  margin-left: 4px;
+  font-size: 12px;
+}
+.citation-toggle.active {
+  color: #4F46E5;
+  background: rgba(79,70,229,0.08);
+}
+
+/* Sources side panel */
+.sources-panel {
+  width: 240px;
+  flex-shrink: 0;
+  margin-left: 12px;
+  background: var(--white);
+  border: 1px solid #C7D2FE;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 400px;
+  align-self: flex-start;
+  box-shadow: 0 2px 8px rgba(79,70,229,0.06);
+}
+
+.sources-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #EEF2FF;
+  border-bottom: 1px solid #C7D2FE;
+}
+
+.sources-panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4338CA;
+}
+
+.sources-panel-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.sources-panel-close:hover {
+  background: var(--surface-warm);
+  color: var(--text-primary);
+}
+
+.sources-search-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px;
+  background: #FAFAFE;
+  border-bottom: 1px solid #E0E7FF;
+}
+
+.sources-search-tag {
+  display: inline-block;
+  width: fit-content;
   font-size: 11px;
-  margin-top: 6px;
-  opacity: 0.6;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+.sources-search-tag.hybrid {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+.sources-search-tag.vector {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.sources-search-stat {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.sources-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.source-item {
+  display: flex;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #E0E7FF;
+  transition: background 0.15s;
+}
+.source-item:last-child {
+  border-bottom: none;
+}
+.source-item:hover {
+  background: #F5F3FF;
+}
+
+.source-index {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #4F46E5;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.source-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.source-doc {
+  font-size: 12px;
+  color: #1E1B4B;
+  font-weight: 600;
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+.source-clause {
+  font-size: 11px;
+  color: #6D7280;
+  line-height: 1.4;
+  margin-top: 1px;
+}
+
+/* keep copy/feedback button styles above */
+
+.feedback-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.feedback-btn:hover {
+  background: var(--surface-warm);
+  color: var(--text-secondary);
+}
+.feedback-btn.active {
+  color: var(--primary);
+  background: rgba(232,112,64,0.08);
 }
 
 .message-bubble.user .message-content :deep(p) { margin: 0; }
-.message-bubble.assistant .message-content :deep(p) { margin: 4px 0; }
+.message-bubble.user .message-content { color: white; }
+.message-bubble.assistant .message-content :deep(p) { margin: 6px 0; }
+.message-bubble.assistant .message-content :deep(p:first-child) { margin-top: 0; }
+.message-bubble.assistant .message-content :deep(p:last-child) { margin-bottom: 0; }
+.message-bubble.assistant .message-content :deep(ul),
+.message-bubble.assistant .message-content :deep(ol) {
+  padding-left: 20px;
+  margin: 6px 0;
+}
+.message-bubble.assistant .message-content :deep(li) {
+  margin: 2px 0;
+}
 .message-bubble.assistant .message-content :deep(pre) {
-  background: #e8eaed;
-  padding: 10px;
-  border-radius: 6px;
+  background: #f4f5f7;
+  padding: 12px 14px;
+  border-radius: 8px;
   overflow-x: auto;
-  font-size: 12px;
-  margin: 8px 0;
+  font-size: 13px;
+  margin: 10px 0;
+  border: 1px solid var(--border-light);
 }
 .message-bubble.assistant .message-content :deep(code) {
-  background: #e8eaed;
-  padding: 1px 4px;
-  border-radius: 3px;
+  background: rgba(232, 112, 64, 0.08);
+  color: var(--primary);
+  padding: 2px 5px;
+  border-radius: 4px;
   font-size: 12px;
+  font-weight: 500;
+}
+.message-bubble.assistant .message-content :deep(pre code) {
+  background: transparent;
+  color: var(--text-primary);
+  padding: 0;
+  font-weight: 400;
 }
 
 /* Typing animation */
@@ -612,61 +876,6 @@ onMounted(async () => {
   0%, 80%, 100% { transform: scale(0); }
   40% { transform: scale(1); }
 }
-
-/* Citation */
-.citation-trigger {
-  margin-top: 6px;
-}
-
-.citation-btn {
-  font-size: 12px !important;
-}
-
-.popover-content {
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-.popover-section {
-  margin-bottom: 6px;
-}
-
-.popover-section:not(:last-child) {
-  padding-bottom: 8px;
-  margin-bottom: 10px;
-  border-bottom: 1px solid #ebeef5;
-}
-
-.popover-section-title {
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 6px;
-  font-size: 13px;
-}
-
-.popover-stats .stat-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 2px 0;
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.popover-stats .stat-label { color: var(--text-muted); }
-.popover-stats .stat-value { font-weight: 500; }
-.stat-emphasis { color: var(--primary); font-weight: 600; }
-
-.citation-item {
-  padding: 5px 0;
-  border-bottom: 1px solid #f2f3f5;
-  display: flex;
-  gap: 6px;
-}
-.citation-item:last-child { border-bottom: none; }
-.citation-index { color: var(--primary); font-weight: 600; min-width: 20px; }
-.citation-doc { color: var(--text-primary); font-weight: 500; }
-.citation-clause { color: var(--text-muted); font-size: 12px; }
-.citation-clause::before { content: '· '; }
 
 /* ===== Input Area ===== */
 .input-area {
