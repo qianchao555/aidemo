@@ -43,7 +43,7 @@ public class KnowledgeRetrievalTools {
     @SuppressWarnings("unchecked")
     private List<Document> doSearch(String query, int topK, double threshold) {
         String department = DepartmentContextHolder.get();
-        Map<String, Object> result = knowledgeBaseService.hybridSearch(query, topK, threshold, department);
+        Map<String, Object> result = knowledgeBaseService.hybridSearch(query, topK, threshold, department, null);
         Object docs = result.get("documents");
         if (docs instanceof List) {
             return (List<Document>) docs;

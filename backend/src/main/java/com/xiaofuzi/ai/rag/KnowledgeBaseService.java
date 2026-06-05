@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.xiaofuzi.ai.dto.VersionOverride;
 import com.xiaofuzi.ai.entity.DocumentGroup;
 import com.xiaofuzi.ai.entity.KnowledgeDocument;
 import com.xiaofuzi.ai.mapper.DocumentGroupMapper;
@@ -398,22 +399,44 @@ public class KnowledgeBaseService {
      *         "keywordCount"-> int 关键词检索命中数
      *         "mergedCount" -> int 融合后最终条数
      */
-    public Map<String, Object> hybridSearch(String query, int topK, double similarityThreshold, String department) {
+    public Map<String, Object> hybridSearch(String query, int topK, double similarityThreshold,
+            String department, List<VersionOverride> versionOverrides) {
         // 1. 向量语义检索（用双倍 topK 扩大候选池，提高 RRF 融合质量）
         //    排除 FAQ 条目：FAQ 走前置精确匹配，不应混入文档检索结果
         //    部门过滤：指定部门时在向量检索阶段按 metadata.department 过滤
+
+        // Build version filter expression
+        String versionFilter;
+        if (versionOverrides != null && !versionOverrides.isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < versionOverrides.size(); i++) {
+                VersionOverride vo = versionOverrides.get(i);
+                if (i > 0) sb.append(" OR ");
+                sb.append("(group_id == '").append(vo.groupId()).append("' AND version == '").append(vo.version()).append("')");
+            }
+            versionFilter = sb.toString();
+        } else {
+            versionFilter = "is_latest == 'true'";
+        }
+
         SearchRequest.Builder vectorReq = SearchRequest.builder()
                 .query(query)
                 .topK(topK * 2)
                 .similarityThreshold(similarityThreshold);
+
+        // Build combined filter expression: department + version
+        List<String> filters = new ArrayList<>();
         if (department != null && !department.isBlank()) {
-            vectorReq.filterExpression("department == '" + department.replace("'", "''") + "'");
+            filters.add("department == '" + department.replace("'", "''") + "'");
         }
+        filters.add(versionFilter);
+        String combinedFilter = String.join(" AND ", filters);
+        vectorReq.filterExpression(combinedFilter);
         List<Document> vectorResults = vectorStore.similaritySearch(vectorReq.build());
         vectorResults = filterNonFaq(vectorResults);
 
         // 2. 关键词模糊检索（pg_trgm 三元组，中文适用：按字符三元组切分后匹配）
-        List<Document> keywordResults = keywordSearch(query, topK * 2, department);
+        List<Document> keywordResults = keywordSearch(query, topK * 2, department, versionOverrides);
         keywordResults = filterNonFaq(keywordResults);
 
         // 3. RRF 融合排序
@@ -506,11 +529,12 @@ public class KnowledgeBaseService {
      * 基于 pg_trgm 的 similarity() 函数做关键词模糊检索。
      * content % query 利用 GIN 索引快速筛选候选，similarity() 计算精确相似度用于排序。
      */
-    private List<Document> keywordSearch(String query, int limit) {
-        return keywordSearch(query, limit, null);
+    private List<Document> keywordSearch(String query, int limit, List<VersionOverride> versionOverrides) {
+        return keywordSearch(query, limit, null, versionOverrides);
     }
 
-    private List<Document> keywordSearch(String query, int limit, String department) {
+    private List<Document> keywordSearch(String query, int limit, String department,
+            List<VersionOverride> versionOverrides) {
         try {
             StringBuilder sqlBuilder = new StringBuilder();
             sqlBuilder.append(String.format(
@@ -522,6 +546,23 @@ public class KnowledgeBaseService {
             if (department != null && !department.isBlank()) {
                 sqlBuilder.append(" AND (metadata->>'department') = ?");
             }
+
+            // Build version filter for keyword search
+            StringBuilder versionCondition = new StringBuilder();
+            if (versionOverrides != null && !versionOverrides.isEmpty()) {
+                versionCondition.append(" AND (");
+                for (int i = 0; i < versionOverrides.size(); i++) {
+                    VersionOverride vo = versionOverrides.get(i);
+                    if (i > 0) versionCondition.append(" OR ");
+                    versionCondition.append(String.format(
+                        "(metadata->>'group_id' = '%s' AND metadata->>'version' = '%s')",
+                        vo.groupId(), vo.version()));
+                }
+                versionCondition.append(")");
+            } else {
+                versionCondition.append(" AND (metadata->>'is_latest') = 'true'");
+            }
+            sqlBuilder.append(versionCondition);
 
             sqlBuilder.append(" ORDER BY keyword_score DESC LIMIT ?");
 
