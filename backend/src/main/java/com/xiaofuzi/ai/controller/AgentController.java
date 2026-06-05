@@ -36,6 +36,15 @@ public class AgentController {
 
     private static final Logger logger = LoggerFactory.getLogger(AgentController.class);
 
+    private static final Pattern SUGGESTIONS_EXTRACT_PATTERN =
+            Pattern.compile("💡\\s*您可以继续问[：:]\\s*\\n?([\\s\\S]*?)$");
+    private static final Pattern SUGGESTIONS_STRIP_WITH_SEP =
+            Pattern.compile("\\n?-*+\\n💡\\s*您可以继续问[：:][\\s\\S]*$");
+    private static final Pattern SUGGESTIONS_STRIP_WITHOUT_SEP =
+            Pattern.compile("\\n💡\\s*您可以继续问[：:][\\s\\S]*$");
+    private static final Pattern SUGGESTIONS_STRIP_NO_NEWLINE =
+            Pattern.compile("💡\\s*您可以继续问[：:][\\s\\S]*$");
+
     private final RagQaAgentService ragQaAgentService;
     private final ChatHistoryMapper chatHistoryMapper;
     private final ChatSessionMapper chatSessionMapper;
@@ -100,6 +109,10 @@ public class AgentController {
                 RagQaAgentService.AskResult result = ragQaAgentService.ask(finalThreadId, finalUserId, userMessage);
                 String response = result.response();
 
+                // 剥离建议问题段落，后续通过 done 事件结构化传递
+                List<String> suggestions = extractSuggestions(response);
+                String cleanResponse = suggestions.isEmpty() ? response : stripSuggestions(response);
+
                 // 推送检索元信息给前端展示
                 Map<String, Object> searchInfo = ragQaMessageHook.getLastSearchInfo();
                 if (searchInfo != null) {
@@ -118,7 +131,7 @@ public class AgentController {
                 }
 
                 // 按句拆分逐句发送
-                String[] segments = response.split("(?<=[。！？\\n])");
+                String[] segments = cleanResponse.split("(?<=[。！？\\n])");
                 for (String segment : segments) {
                     if (segment.trim().isEmpty()) continue;
                     Thread.sleep(30);
@@ -131,7 +144,8 @@ public class AgentController {
                         Map.of("type", "done", "content",
                                 Map.of("threadId", finalThreadId,
                                        "userMsgId", result.userMsgId(),
-                                       "assistantMsgId", result.assistantMsgId())));
+                                       "assistantMsgId", result.assistantMsgId(),
+                                       "suggestions", suggestions)));
                 emitter.send(SseEmitter.event().name("done").data(doneJson));
                 emitter.complete();
             } catch (Exception e) {
@@ -231,8 +245,7 @@ public class AgentController {
      */
     private List<String> extractSuggestions(String content) {
         if (content == null || content.isBlank()) return List.of();
-        Pattern p = Pattern.compile("💡\\s*您可以继续问[：:]\\s*\\n?([\\s\\S]*?)$");
-        Matcher m = p.matcher(content);
+        Matcher m = SUGGESTIONS_EXTRACT_PATTERN.matcher(content);
         if (!m.find()) return List.of();
 
         String raw = m.group(1).trim();
@@ -257,8 +270,9 @@ public class AgentController {
      */
     private String stripSuggestions(String content) {
         if (content == null || content.isBlank()) return content;
-        return content
-                .replaceAll("\\n?-*+\\n💡\\s*您可以继续问[：:][\\s\\S]*$", "")
-                .replaceAll("\\n💡\\s*您可以继续问[：:][\\s\\S]*$", "");
+        String stripped = SUGGESTIONS_STRIP_WITH_SEP.matcher(content).replaceAll("");
+        stripped = SUGGESTIONS_STRIP_WITHOUT_SEP.matcher(stripped).replaceAll("");
+        stripped = SUGGESTIONS_STRIP_NO_NEWLINE.matcher(stripped).replaceAll("");
+        return stripped;
     }
 }
