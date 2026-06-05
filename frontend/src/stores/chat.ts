@@ -39,8 +39,9 @@ export const useChatStore = defineStore('chat', () => {
           role: h.role,
           content: h.content,
           timestamp: new Date(h.createTime).getTime(),
-          sources: extractSources(h.content),
-          rating: h.rating
+          sources: h.role === 'assistant' ? extractSources(h.content) : undefined,
+          rating: h.rating,
+          suggestions: h.role === 'assistant' ? extractSuggestions(h.content) : undefined
         }))
       } catch {
         messages.value[threadId] = []
@@ -65,12 +66,18 @@ export const useChatStore = defineStore('chat', () => {
 
   /** ★ 从回答内容中解析「💡 您可以继续问：」段落的建议问题列表 */
   function extractSuggestions(content: string): string[] {
-    const match = content.match(/💡\s*您可以继续问：\s*\n([\s\S]*?)$/)
+    const match = content.match(/💡\s*您可以继续问[：:]\s*\n?([\s\S]*?)$/)
     if (!match) return []
-    const lines = match[1].trim().split('\n')
-    return lines
-      .map(l => l.replace(/^-\s*/, '').trim())
-      .filter(l => l.length > 0 && l.length <= 50)
+    const items: string[] = []
+    for (const line of match[1].trim().split('\n')) {
+      if (!line.trim()) continue
+      // 同一行内按 ？- 或 ?- 拆分（覆盖 LLM 挤在一行的情况）
+      for (const part of line.split(/(?<=[？?])\s*-\s*/)) {
+        const cleaned = part.replace(/^[-\s•\d.、]+/, '').trim()
+        if (cleaned && cleaned.length <= 50) items.push(cleaned)
+      }
+    }
+    return items
   }
 
   async function createSession(): Promise<string> {
