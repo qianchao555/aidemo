@@ -41,7 +41,7 @@ CREATE TABLE document_group (
 | 新增 | `group_id` | bigint | FK → document_group.id |
 | 新增 | `is_latest` | boolean | 是否为该组最新版本，默认 true |
 
-`version` 字段不再硬编码 `"1.0"`，上传时由用户指定或自动推断。
+`version` 字段不再硬编码 `"1.0"`，上传时由后端自动从文档内容中提取（如制度文档标题或正文中的年份/版本号）。
 
 ### 向量表 metadata 扩展
 
@@ -58,12 +58,16 @@ CREATE TABLE document_group (
 ## 二、上传新版本流程
 
 1. 用户上传文件，勾选「这是已有文档的新版本」，从下拉选择要关联的旧文档（仅限同类别同部门的 active 文档）
-2. 后端在一个事务中执行：
-   - 找到旧文档的 `group_id`，在该 group 下创建新 `KnowledgeDocument`，`is_latest = true`
+2. 后端解析文档内容，自动提取版本号：
+   - 用 LLM 或正则从文档标题/正文中提取发布日期、年份或版本号
+   - 常见模式：落款日期、文号中的年份（如 `〔2026〕`）、标题中的年份标识
+   - 提取失败时，回退为上传时间所在年份
+3. 后端在一个事务中执行：
+   - 找到旧文档的 `group_id`，在该 group 下创建新 `KnowledgeDocument`，`is_latest = true`，`version` 为提取结果
    - 将同 group 下其他文档的 `is_latest` 改为 false，`status` 改为 `archived`
    - 更新 `document_group.latest_document_id` 指向新文档
-3. 向量摄入时，chunk metadata 写入 `group_id`、`version`、`is_latest = "true"`
-4. 首次上传的文档（不勾选「新版本」）：自动创建新的 `document_group`，`latest_document_id` 指向该文档
+4. 向量摄入时，chunk metadata 写入 `group_id`、`version`、`is_latest = "true"`
+5. 首次上传的文档（不勾选「新版本」）：自动创建新的 `document_group`，`latest_document_id` 指向该文档，同样自动提取版本号
 
 ---
 
@@ -157,7 +161,7 @@ versionOverrides?: { group_id: number, version: string }[]
 | 新建 `mapper/DocumentGroupMapper.java` + XML | CRUD |
 | `entity/KnowledgeDocument.java` | 新增 `groupId`、`isLatest` 字段 |
 | `mapper/KnowledgeDocumentMapper.java` + XML | 新增 `findByGroupId`、按 group 更新 `isLatest` |
-| `KnowledgeBaseService.java` | 上传逻辑修改：创建/关联 group，写入 metadata；`hybridSearch` 加版本过滤 |
+| `KnowledgeBaseService.java` | 上传逻辑修改：创建/关联 group，写入 metadata；新增版本号自动提取方法；`hybridSearch` 加版本过滤 |
 | `RagQaAgentService.java` | 检索后生成 `version_info` 事件；解析 `versionOverrides` 参数 |
 | `controller/AgentController.java` | stream 端点接收 `versionOverrides` |
 | `controller/KnowledgeDocumentController.java` | 上传接口接收 `parentDocumentId` 参数 |
@@ -178,7 +182,7 @@ versionOverrides?: { group_id: number, version: string }[]
 
 ## 七、测试要点
 
-1. 首次上传文档自动创建 group；上传新版本正确归档旧版本、更新 latest_document_id
+1. 首次上传文档自动创建 group，版本号从文档内容正确提取；上传新版本正确归档旧版本、更新 latest_document_id
 2. 默认检索仅返回 `is_latest = true` 的 chunk
 3. 指定 `group_id` + `version` 检索返回对应版本 chunk
 4. 有历史版本时 SSE 正确发送 `version_info` 事件；无历史版本时不发送
