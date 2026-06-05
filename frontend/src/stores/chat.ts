@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { ChatMessage, ChatHistoryDto, SessionSummary, MessageSource } from '@/types'
+import type { ChatMessage, ChatHistoryDto, SessionSummary, MessageSource, VersionInfoItem } from '@/types'
 import { createSessionApi, listSessions, getSessionHistory, deleteSessionApi } from '@/api/agent'
 
 export const useChatStore = defineStore('chat', () => {
@@ -8,6 +8,9 @@ export const useChatStore = defineStore('chat', () => {
   const currentThreadId = ref<string>('')
   const messages = ref<Record<string, ChatMessage[]>>({})
   const loadingSessions = ref(false)
+
+  /** 每个消息对应的版本信息 */
+  const versionInfoMap = ref<Record<string, VersionInfoItem[]>>({})
 
   async function fetchSessions() {
     loadingSessions.value = true
@@ -166,7 +169,13 @@ export const useChatStore = defineStore('chat', () => {
     const msg = msgs.find(m => m.id === msgId)
     if (msg) {
       if (!msg.sources) msg.sources = []
-      msg.sources.push(source)
+      msg.sources.push({
+        document: source.document,
+        clause: source.clause,
+        version: source.version,
+        group_id: source.group_id,
+        has_history: source.has_history
+      })
     }
   }
 
@@ -186,7 +195,7 @@ export const useChatStore = defineStore('chat', () => {
   const hasCurrentSession = computed(() => !!currentThreadId.value)
 
   return {
-    sessions, currentThreadId, messages, loadingSessions,
+    sessions, currentThreadId, messages, loadingSessions, versionInfoMap,
     currentMessages, hasCurrentSession,
     fetchSessions, createSession, switchSession, deleteSession,
     addMessage, appendContent, finishMessage, addSource, updateMessageId

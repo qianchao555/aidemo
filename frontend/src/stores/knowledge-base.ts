@@ -71,10 +71,10 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     }
   }
 
-  async function upload(file: File, parserCategory?: string, category?: string, description?: string, department?: string) {
+  async function upload(file: File, parserCategory?: string, category?: string, description?: string, department?: string, parentDocumentId?: number) {
     loading.value = true
     try {
-      const res = await uploadFile(file, parserCategory, category, description, department)
+      const res = await uploadFile(file, parserCategory, category, description, department, parentDocumentId)
       await fetchDocuments()
       return res
     } finally {
