@@ -73,7 +73,7 @@
               <div class="message-content" v-html="renderContent(msg.content)" />
               <div v-if="msg.role === 'assistant'" class="message-actions">
                 <button class="action-btn" title="复制" @click="copyMessage(msg)">
-                  <el-icon :size="15"><CopyDocument /></el-icon>
+                  <el-icon :size="17"><CopyDocument /></el-icon>
                 </button>
                 <button
                   class="feedback-btn"
@@ -167,10 +167,10 @@ import { ElMessage } from 'element-plus'
 import { Delete, Expand, Fold, Plus, CopyDocument, Promotion, Loading, ChatDotRound } from '@element-plus/icons-vue'
 import { useChatStore } from '@/stores/chat'
 import { ragQaChat, ragQaChatStream, submitFeedback } from '@/api/agent'
-import thumbUpWhite from '@/assets/icons/点赞-白色图标.svg'
-import thumbUpBlack from '@/assets/icons/点赞-黑色图标.svg'
-import thumbDownWhite from '@/assets/icons/不点赞-白色图.svg'
-import thumbDownBlack from '@/assets/icons/不点赞-黑色图.svg'
+import thumbUpWhite from '@/assets/icons/点赞-白.svg'
+import thumbUpBlack from '@/assets/icons/点赞-黑.svg'
+import thumbDownWhite from '@/assets/icons/点踩-白.svg'
+import thumbDownBlack from '@/assets/icons/点踩-黑.svg'
 
 const chatStore = useChatStore()
 const route = useRoute()
@@ -408,7 +408,7 @@ onMounted(async () => {
 /* ===== Chat Page Layout ===== */
 .chat-page {
   display: flex;
-  height: calc(100vh - 32px);
+  height: 100%;
   background: var(--white);
   border-radius: var(--radius-lg);
   overflow: hidden;
@@ -637,8 +637,8 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border: none;
   border-radius: 6px;
   background: transparent;
@@ -660,8 +660,8 @@ onMounted(async () => {
   font-size: 12px;
 }
 .citation-toggle.active {
-  color: var(--primary);
-  background: rgba(232,112,64,0.08);
+  color: #4F46E5;
+  background: rgba(79,70,229,0.08);
 }
 
 /* Sources side panel */
@@ -670,13 +670,14 @@ onMounted(async () => {
   flex-shrink: 0;
   margin-left: 12px;
   background: var(--white);
-  border: 1px solid var(--border-light);
+  border: 1px solid #C7D2FE;
   border-radius: var(--radius-md);
   overflow: hidden;
   display: flex;
   flex-direction: column;
   max-height: 400px;
   align-self: flex-start;
+  box-shadow: 0 2px 8px rgba(79,70,229,0.06);
 }
 
 .sources-panel-header {
@@ -684,13 +685,14 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
-  border-bottom: 1px solid #f0f0f0;
+  background: #EEF2FF;
+  border-bottom: 1px solid #C7D2FE;
 }
 
 .sources-panel-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: #4338CA;
 }
 
 .sources-panel-close {
@@ -715,7 +717,8 @@ onMounted(async () => {
   flex-direction: column;
   gap: 4px;
   padding: 10px 14px;
-  border-bottom: 1px solid #f0f0f0;
+  background: #FAFAFE;
+  border-bottom: 1px solid #E0E7FF;
 }
 
 .sources-search-tag {
@@ -749,21 +752,25 @@ onMounted(async () => {
 .source-item {
   display: flex;
   gap: 10px;
-  padding: 8px 14px;
-  border-bottom: 1px solid #f5f5f5;
+  padding: 10px 14px;
+  border-bottom: 1px solid #E0E7FF;
+  transition: background 0.15s;
 }
 .source-item:last-child {
   border-bottom: none;
 }
+.source-item:hover {
+  background: #F5F3FF;
+}
 
 .source-index {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  background: rgba(232,112,64,0.1);
-  color: var(--primary);
-  font-size: 11px;
-  font-weight: 600;
+  background: #4F46E5;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -779,16 +786,17 @@ onMounted(async () => {
 
 .source-doc {
   font-size: 12px;
-  color: var(--text-primary);
-  font-weight: 500;
+  color: #1E1B4B;
+  font-weight: 600;
   line-height: 1.4;
   word-break: break-all;
 }
 
 .source-clause {
   font-size: 11px;
-  color: var(--text-muted);
+  color: #6D7280;
   line-height: 1.4;
+  margin-top: 1px;
 }
 
 /* keep copy/feedback button styles above */
@@ -868,8 +876,6 @@ onMounted(async () => {
   0%, 80%, 100% { transform: scale(0); }
   40% { transform: scale(1); }
 }
-
-.citation-clause::before { content: '· '; }
 
 /* ===== Input Area ===== */
 .input-area {

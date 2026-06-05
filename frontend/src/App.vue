@@ -207,6 +207,7 @@ async function handleLogout() {
 
 /* ===== Global Reset ===== */
 * { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { overflow: hidden; height: 100%; }
 
 /* ===== Login Shell ===== */
 .login-shell {
