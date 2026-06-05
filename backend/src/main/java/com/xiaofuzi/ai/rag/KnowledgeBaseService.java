@@ -783,4 +783,35 @@ public class KnowledgeBaseService {
         logger.info("文档解析并入库: {} 个解析单元 -> {} 个向量分块", parsedDocs.size(), allChunks.size());
         return allChunks.size();
     }
+
+    /**
+     * 从文档文本内容中自动提取版本号。
+     * 策略：正则优先匹配常见中文制度文档的年份模式，提取失败时回退为当前年份。
+     */
+    private String extractVersion(List<Document> parsedDocs) {
+        String fullText = parsedDocs.stream()
+                .map(Document::getText)
+                .collect(Collectors.joining("\n"));
+
+        // 匹配文号中的年份，如：〔2026〕、(2025)、[2026]
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("[〔\\(\\[]\\s*(20\\d{2})\\s*[〕\\)\\]]").matcher(fullText);
+        if (m.find()) {
+            return m.group(1);
+        }
+
+        // 匹配发布日期，如：2026年1月1日、2026-01-01
+        m = java.util.regex.Pattern.compile("(20\\d{2})\\s*年|(20\\d{2})[-/]\\d{1,2}[-/]\\d{1,2}").matcher(fullText);
+        if (m.find()) {
+            return m.group(1) != null ? m.group(1) : m.group(2);
+        }
+
+        // 匹配标题中的版本号：v2026, V2025
+        m = java.util.regex.Pattern.compile("[vV](20\\d{2})").matcher(fullText);
+        if (m.find()) {
+            return m.group(1);
+        }
+
+        // 回退：当前年份
+        return String.valueOf(java.time.Year.now().getValue());
+    }
 }
