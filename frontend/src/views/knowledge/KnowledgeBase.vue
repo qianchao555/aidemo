@@ -74,6 +74,14 @@
             <span v-else class="text-muted">-</span>
           </template>
         </el-table-column>
+        <el-table-column prop="version" label="版本" width="90" sortable="custom">
+          <template #default="{ row }">
+            <span v-if="row.groupId" class="version-link" @click="openVersionHistory(row)">
+              v{{ row.version || '-' }}
+            </span>
+            <span v-else class="text-muted">v{{ row.version || '-' }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="chunkCount" label="分块" sortable="custom" />
         <el-table-column prop="status" label="状态" sortable="custom">
           <template #default="{ row }">
@@ -139,6 +147,18 @@
         <div class="upload-form-field" style="margin-bottom: 14px">
           <label class="upload-form-label">描述（可选）</label>
           <el-input v-model="uploadDescription" placeholder="简要描述文档内容" />
+        </div>
+        <div class="upload-form-field" style="margin-bottom: 14px">
+          <el-checkbox v-model="isNewVersion" label="这是已有文档的新版本" />
+        </div>
+        <div v-if="isNewVersion" class="upload-form-field" style="margin-bottom: 14px">
+          <label class="upload-form-label">选择要更新的旧文档</label>
+          <el-select v-model="parentDocumentId" placeholder="选择要关联的旧文档"
+            filterable style="width: 100%">
+            <el-option v-for="doc in parentCandidateDocuments" :key="doc.id"
+              :label="doc.documentName + ' (v' + (doc.version || '-') + ')'"
+              :value="doc.id!" />
+          </el-select>
         </div>
         <el-upload
           ref="uploadRef"
@@ -228,17 +248,36 @@
       </template>
     </el-drawer>
 
+    <!-- Version History Drawer -->
+    <el-drawer v-model="versionHistoryVisible" :title="'版本历史 · ' + versionGroupName" size="400px" direction="rtl">
+      <div class="detail-body">
+        <div v-for="doc in versionHistoryDocs" :key="doc.id" class="version-item" :class="{ latest: doc.isLatest }">
+          <div class="version-item-header">
+            <span class="version-item-version">v{{ doc.version || '-' }}</span>
+            <el-tag v-if="doc.isLatest" size="small" type="success">最新</el-tag>
+            <el-tag v-else-if="doc.status === 'archived'" size="small" type="info">已归档</el-tag>
+          </div>
+          <div class="version-item-meta">
+            <span>{{ doc.createTime || '-' }}</span>
+            <span>{{ doc.chunkCount ?? 0 }} 分块</span>
+          </div>
+        </div>
+        <el-empty v-if="versionHistoryDocs.length === 0" description="该文档无版本历史" :image-size="40" />
+      </div>
+    </el-drawer>
+
     <input ref="reingestFileInput" type="file" accept=".pdf,.doc,.docx,.txt,.md" style="display: none" @change="onReingestFileChange" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { UploadFilled, Search } from '@element-plus/icons-vue'
 import { useKnowledgeStore } from '@/stores/knowledge-base'
 import { DEPARTMENTS } from '@/constants/departments'
 import type { KnowledgeDocument } from '@/types'
+import { getGroupVersions } from '@/api/knowledge-base'
 
 const store = useKnowledgeStore()
 const uploadRef = ref()
@@ -251,6 +290,18 @@ const uploadCategory = ref('')
 const uploadDescription = ref('')
 const filterDepartment = ref('')
 const uploadDepartment = ref(readUserDepartment())
+
+const isNewVersion = ref(false)
+const parentDocumentId = ref<number | undefined>(undefined)
+
+const parentCandidateDocuments = computed(() =>
+  store.documentList.filter(d =>
+    d.status === 'active' &&
+    d.id !== undefined &&
+    (!uploadCategory.value || d.category === uploadCategory.value) &&
+    (!uploadDepartment.value || d.department === uploadDepartment.value)
+  )
+)
 
 const DEPT_TAG_TYPES = ['', 'success', 'warning', 'danger', 'info'] as const
 
@@ -274,6 +325,8 @@ function openUploadDialog() {
   uploadCategory.value = ''
   uploadDescription.value = ''
   uploadDepartment.value = readUserDepartment()
+  isNewVersion.value = false
+  parentDocumentId.value = undefined
   uploadDialogVisible.value = true
 }
 
@@ -288,7 +341,8 @@ async function handleUpload() {
     uploadParserCategory.value || undefined,
     uploadCategory.value || undefined,
     uploadDescription.value || undefined,
-    uploadDepartment.value || undefined
+    uploadDepartment.value || undefined,
+    isNewVersion.value ? parentDocumentId.value : undefined
   )
   ElMessage.success('文件上传摄入成功')
   uploadDialogVisible.value = false
@@ -384,6 +438,23 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024) return bytes + ' B'
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+// Version history
+const versionHistoryVisible = ref(false)
+const versionGroupName = ref('')
+const versionHistoryDocs = ref<KnowledgeDocument[]>([])
+
+async function openVersionHistory(row: KnowledgeDocument) {
+  if (!row.groupId) return
+  versionGroupName.value = row.documentName
+  versionHistoryVisible.value = true
+  try {
+    const res = await getGroupVersions(row.groupId)
+    versionHistoryDocs.value = Array.isArray(res) ? res : (res as any).list || []
+  } catch {
+    versionHistoryDocs.value = []
+  }
 }
 
 onMounted(() => {
@@ -497,4 +568,16 @@ onMounted(() => {
   border-top: 1px solid var(--border-light);
   margin-top: 4px;
 }
+
+.version-link { color: var(--primary); cursor: pointer; font-weight: 500; }
+.version-link:hover { text-decoration: underline; }
+
+.version-item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-light);
+}
+.version-item.latest { background: rgba(232,112,64,0.03); margin: 0 -8px; padding-left: 8px; padding-right: 8px; }
+.version-item-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.version-item-version { font-weight: 600; font-size: 14px; color: var(--text-primary); }
+.version-item-meta { display: flex; gap: 16px; font-size: 12px; color: var(--text-muted); }
 </style>
