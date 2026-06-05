@@ -19,6 +19,6 @@ public interface DocumentGroupMapper {
 
     void updateStatus(@Param("id") Long id, @Param("status") String status);
 
-    /** 查询某 group 下所有文档（含 archived），用于获取 available_versions */
+    /** 查询所有活跃的文档分组 */
     List<DocumentGroup> findAllActive();
 }
