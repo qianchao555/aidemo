@@ -26,6 +26,9 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @RestController
 @RequestMapping("/agent")
@@ -220,5 +223,42 @@ public class AgentController {
         chatSessionMapper.deleteByThreadId(threadId);
         logger.info("会话已删除: threadId={}", threadId);
         return Result.success(Map.of("success", true, "message", "会话已删除"));
+    }
+
+    /**
+     * 从回答文本中提取「💡 您可以继续问：」段落的建议问题列表。
+     * 支持多条建议在同一行（用 ？- 分隔）或分行。
+     */
+    private List<String> extractSuggestions(String content) {
+        if (content == null || content.isBlank()) return List.of();
+        Pattern p = Pattern.compile("💡\\s*您可以继续问[：:]\\s*\\n?([\\s\\S]*?)$");
+        Matcher m = p.matcher(content);
+        if (!m.find()) return List.of();
+
+        String raw = m.group(1).trim();
+        List<String> items = new ArrayList<>();
+        for (String line : raw.split("\n")) {
+            line = line.trim();
+            if (line.isEmpty()) continue;
+            // 同一行内按 ？- 或 ?- 拆分
+            String[] parts = line.split("(?<=[？?])\\s*-\\s*");
+            for (String part : parts) {
+                part = part.replaceAll("^[-\\s•\\d.、]+", "").trim();
+                if (!part.isEmpty() && part.length() <= 50) {
+                    items.add(part);
+                }
+            }
+        }
+        return items;
+    }
+
+    /**
+     * 从回答文本中移除「💡 您可以继续问：」段落（含可选的前置 --- 分隔线）。
+     */
+    private String stripSuggestions(String content) {
+        if (content == null || content.isBlank()) return content;
+        return content
+                .replaceAll("\\n?-*+\\n💡\\s*您可以继续问[：:][\\s\\S]*$", "")
+                .replaceAll("\\n💡\\s*您可以继续问[：:][\\s\\S]*$", "");
     }
 }
