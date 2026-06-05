@@ -97,7 +97,7 @@ public class KnowledgeDocumentController {
      * 增量更新文档：删旧向量 → 解析新文件 → 切分 → 写入新向量 → 更新元信息。
      * 这是增量更新机制的核心入口。
      */
-    @RequireRole("admin")
+    @RequireRole(com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN)
     @PostMapping("/{id}/reingest")
     @Transactional
     public Result<Map<String, Object>> reingestDocument(
@@ -141,7 +141,7 @@ public class KnowledgeDocumentController {
     /**
      * 删除文档：按 document_id 删全部向量 + 软删除元信息记录。
      */
-    @RequireRole("admin")
+    @RequireRole(com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN)
     @DeleteMapping("/{id}")
     public Result<Map<String, Object>> deleteDocument(@PathVariable Long id) {
         KnowledgeDocument doc = documentMapper.findById(id);

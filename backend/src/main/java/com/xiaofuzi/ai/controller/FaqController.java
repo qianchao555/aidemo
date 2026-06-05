@@ -42,14 +42,14 @@ public class FaqController {
 
     /***********************************FAQ 管理 API*******************************/
 
-    @RequireRole("admin")
+    @RequireRole(com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN)
     @PostMapping("/create-faq")
     public Result<FaqEntry> createFaq(@RequestBody FaqEntry faqEntry) {
         faqService.create(faqEntry);
         return Result.success(faqEntry);
     }
 
-    @RequireRole("admin")
+    @RequireRole(com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN)
     @PutMapping("/faq/{id}")
     public Result<FaqEntry> updateFaq(@PathVariable Long id, @RequestBody FaqEntry faqEntry) {
         faqEntry.setId(id);
@@ -57,7 +57,7 @@ public class FaqController {
         return Result.success(faqEntry);
     }
 
-    @RequireRole("admin")
+    @RequireRole(com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN)
     @DeleteMapping("/faq/{id}")
     public Result<Map<String, Object>> deleteFaq(@PathVariable Long id) {
         faqService.delete(id);
@@ -103,14 +103,14 @@ public class FaqController {
         return Result.success(faqService.findSimilar(question));
     }
 
-    @RequireRole("admin")
+    @RequireRole(com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN)
     @PostMapping("/faq/batch-delete")
     public Result<Map<String, Object>> batchDelete(@RequestBody List<Long> ids) {
         faqService.batchDelete(ids);
         return Result.success(Map.of("success", true, "message", "批量删除完成", "count", ids.size()));
     }
 
-    @RequireRole("admin")
+    @RequireRole(com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN)
     @PostMapping("/faq/batch-update-category")
     public Result<Map<String, Object>> batchUpdateCategory(@RequestBody Map<String, Object> body) {
         @SuppressWarnings("unchecked")
@@ -121,7 +121,7 @@ public class FaqController {
         return Result.success(Map.of("success", true, "message", "批量更新分类完成", "count", ids.size()));
     }
 
-    @RequireRole("admin")
+    @RequireRole(com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN)
     @PostMapping("/faq/batch-update-status")
     public Result<Map<String, Object>> batchUpdateStatus(@RequestBody Map<String, Object> body) {
         @SuppressWarnings("unchecked")
@@ -132,13 +132,13 @@ public class FaqController {
         return Result.success(Map.of("success", true, "message", "批量更新状态完成", "count", ids.size()));
     }
 
-    @RequireRole("admin")
+    @RequireRole(com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN)
     @PostMapping("/faq/import")
     public Result<Map<String, Object>> importFaq(@RequestParam("file") MultipartFile file) {
         List<FaqEntry> entries = new ArrayList<>();
-        try (java.io.InputStream is = file.getInputStream()) {
-            org.apache.poi.ss.usermodel.Workbook workbook =
-                org.apache.poi.ss.usermodel.WorkbookFactory.create(is);
+        try (java.io.InputStream is = file.getInputStream();
+             org.apache.poi.ss.usermodel.Workbook workbook =
+                org.apache.poi.ss.usermodel.WorkbookFactory.create(is)) {
             org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
             for (int i = 1; i <= sheet.getLastRowNum(); i++) {
                 org.apache.poi.ss.usermodel.Row row = sheet.getRow(i);
@@ -155,7 +155,6 @@ public class FaqController {
                     .build();
                 entries.add(entry);
             }
-            workbook.close();
         } catch (Exception e) {
             logger.error("FAQ 导入失败", e);
             return Result.error("文件解析失败: " + e.getMessage());
@@ -193,39 +192,40 @@ public class FaqController {
         if ("xlsx".equalsIgnoreCase(format)) {
             response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
             response.setHeader("Content-Disposition", "attachment; filename=faq_export.xlsx");
-            org.apache.poi.xssf.usermodel.XSSFWorkbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
-            org.apache.poi.xssf.usermodel.XSSFSheet sheet = workbook.createSheet("FAQ");
-            org.apache.poi.xssf.usermodel.XSSFRow header = sheet.createRow(0);
-            header.createCell(0).setCellValue("问题");
-            header.createCell(1).setCellValue("答案");
-            header.createCell(2).setCellValue("分类");
-            header.createCell(3).setCellValue("关键词");
-            int rowIdx = 1;
-            for (FaqEntry f : list) {
-                org.apache.poi.xssf.usermodel.XSSFRow row = sheet.createRow(rowIdx++);
-                row.createCell(0).setCellValue(f.getQuestion());
-                row.createCell(1).setCellValue(f.getAnswer());
-                row.createCell(2).setCellValue(f.getCategory() != null ? f.getCategory() : "");
-                row.createCell(3).setCellValue(f.getKeywords() != null ? f.getKeywords() : "");
+            try (org.apache.poi.xssf.usermodel.XSSFWorkbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
+                org.apache.poi.xssf.usermodel.XSSFSheet sheet = workbook.createSheet("FAQ");
+                org.apache.poi.xssf.usermodel.XSSFRow header = sheet.createRow(0);
+                header.createCell(0).setCellValue("问题");
+                header.createCell(1).setCellValue("答案");
+                header.createCell(2).setCellValue("分类");
+                header.createCell(3).setCellValue("关键词");
+                int rowIdx = 1;
+                for (FaqEntry f : list) {
+                    org.apache.poi.xssf.usermodel.XSSFRow row = sheet.createRow(rowIdx++);
+                    row.createCell(0).setCellValue(f.getQuestion());
+                    row.createCell(1).setCellValue(f.getAnswer());
+                    row.createCell(2).setCellValue(f.getCategory() != null ? f.getCategory() : "");
+                    row.createCell(3).setCellValue(f.getKeywords() != null ? f.getKeywords() : "");
+                }
+                workbook.write(response.getOutputStream());
             }
-            workbook.write(response.getOutputStream());
-            workbook.close();
         } else {
             response.setContentType("text/csv; charset=UTF-8");
             response.setHeader("Content-Disposition", "attachment; filename=faq_export.csv");
             java.io.OutputStream os = response.getOutputStream();
             os.write(new byte[]{(byte) 0xEF, (byte) 0xBB, (byte) 0xBF});
-            java.io.PrintWriter writer = new java.io.PrintWriter(
-                new java.io.OutputStreamWriter(os, java.nio.charset.StandardCharsets.UTF_8));
-            writer.println("问题,答案,分类,关键词");
-            for (FaqEntry f : list) {
-                writer.printf("\"%s\",\"%s\",\"%s\",\"%s\"\n",
-                    escapeCsv(f.getQuestion()),
-                    escapeCsv(f.getAnswer()),
-                    escapeCsv(f.getCategory()),
-                    escapeCsv(f.getKeywords()));
+            try (java.io.PrintWriter writer = new java.io.PrintWriter(
+                new java.io.OutputStreamWriter(os, java.nio.charset.StandardCharsets.UTF_8))) {
+                writer.println("问题,答案,分类,关键词");
+                for (FaqEntry f : list) {
+                    writer.printf("\"%s\",\"%s\",\"%s\",\"%s\"\n",
+                        escapeCsv(f.getQuestion()),
+                        escapeCsv(f.getAnswer()),
+                        escapeCsv(f.getCategory()),
+                        escapeCsv(f.getKeywords()));
+                }
+                writer.flush();
             }
-            writer.flush();
         }
     }
 
@@ -240,7 +240,7 @@ public class FaqController {
         return Result.success(list);
     }
 
-    @RequireRole("admin")
+    @RequireRole(com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN)
     @GetMapping("/faq/candidates")
     public Result<List<Map<String, Object>>> faqCandidates(
             @RequestParam(defaultValue = "20") int limit,

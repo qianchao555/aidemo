@@ -52,15 +52,15 @@ public final class FaqChunker {
 
         if (pairs.isEmpty()) {
             return List.of(new Document(text, Map.of(
-                    "content_type", contentType,
-                    "skip_split", true)));
+                    com.xiaofuzi.ai.util.AppConstants.META_CONTENT_TYPE, contentType,
+                    com.xiaofuzi.ai.util.AppConstants.META_SKIP_SPLIT, true)));
         }
 
         List<Document> chunks = new ArrayList<>();
         for (QAPair pair : pairs) {
             Map<String, Object> meta = new LinkedHashMap<>();
-            meta.put("content_type", contentType);
-            meta.put("skip_split", true);
+            meta.put(com.xiaofuzi.ai.util.AppConstants.META_CONTENT_TYPE, contentType);
+            meta.put(com.xiaofuzi.ai.util.AppConstants.META_SKIP_SPLIT, true);
             meta.put("qa_question", pair.question);
 
             // 格式化：问题 + 答案合并为一段，便于向量检索匹配

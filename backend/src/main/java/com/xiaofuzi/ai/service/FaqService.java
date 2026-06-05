@@ -461,12 +461,12 @@ public class FaqService {
 
             // 写入新向量
             Map<String, Object> metadata = new HashMap<>();
-            metadata.put("content_type", "faq_entry");
+            metadata.put(com.xiaofuzi.ai.util.AppConstants.META_CONTENT_TYPE, com.xiaofuzi.ai.util.AppConstants.CONTENT_TYPE_FAQ);
             metadata.put("faq_id", entry.getId());
             metadata.put("faq_category", entry.getCategory() != null ? entry.getCategory() : "");
             metadata.put("source", entry.getSourceDoc() != null ? entry.getSourceDoc() : DEFAULT_FAQ_SOURCE);
             metadata.put("heading_path", entry.getHeadingPath() != null ? entry.getHeadingPath() : "");
-            metadata.put("skip_split", true);
+            metadata.put(com.xiaofuzi.ai.util.AppConstants.META_SKIP_SPLIT, true);
 
             String text = "【FAQ】" + entry.getQuestion() + "\n" + entry.getAnswer();
             Document doc = new Document(text, metadata);

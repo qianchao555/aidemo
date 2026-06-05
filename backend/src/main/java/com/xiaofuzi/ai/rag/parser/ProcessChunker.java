@@ -57,8 +57,8 @@ public final class ProcessChunker {
         if (regions.isEmpty()) {
             // 没有检测到步骤 —— 可能是纯流程说明文档，但仍尝试提取顶层元数据
             Map<String, Object> meta = new LinkedHashMap<>();
-            meta.put("content_type", contentType);
-            meta.put("skip_split", true);
+            meta.put(com.xiaofuzi.ai.util.AppConstants.META_CONTENT_TYPE, contentType);
+            meta.put(com.xiaofuzi.ai.util.AppConstants.META_SKIP_SPLIT, true);
             extractDocumentMeta(text, meta);
             return List.of(new Document(text, meta));
         }
@@ -72,9 +72,9 @@ public final class ProcessChunker {
 
         for (StepRegion region : regions) {
             Map<String, Object> meta = new LinkedHashMap<>();
-            meta.put("content_type", contentType);
-            meta.put("skip_split", true);
-            meta.put("step_title", region.title);
+            meta.put(com.xiaofuzi.ai.util.AppConstants.META_CONTENT_TYPE, contentType);
+            meta.put(com.xiaofuzi.ai.util.AppConstants.META_SKIP_SPLIT, true);
+            meta.put(com.xiaofuzi.ai.util.AppConstants.META_STEP_TITLE, region.title);
 
             // 段落级元数据：角色/时限优先取步骤内命中，其次取文档级
             String stepText = region.content;

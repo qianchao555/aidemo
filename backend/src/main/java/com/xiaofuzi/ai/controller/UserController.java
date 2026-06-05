@@ -19,7 +19,7 @@ public class UserController {
     }
 
     /** 获取所有用户列表（仅管理员） */
-    @RequireRole("admin")
+    @RequireRole(com.xiaofuzi.ai.util.AppConstants.ROLE_ADMIN)
     @GetMapping
     public Result<List<ChatUser>> listUsers() {
         return Result.success(chatUserMapper.findAll());

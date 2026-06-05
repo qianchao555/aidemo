@@ -65,7 +65,7 @@ public class RagQaAgentService {
 
         logger.info("RAG问答请求 | threadId: {} | userId: {} | question: {}", threadId, userId, question);
 
-        ChatHistory userMsg = saveHistory(threadId, "user", question, null, null);
+        ChatHistory userMsg = saveHistory(threadId, com.xiaofuzi.ai.util.AppConstants.CHAT_ROLE_USER, question, null, null);
 
         String enrichedQuestion = buildEnrichedQuestion(threadId, question);
 
@@ -75,7 +75,7 @@ public class RagQaAgentService {
             logger.info("RAG问答完成 | threadId: {} | 响应长度: {} 字符", threadId, responseText.length());
 
             String[] srcInfo = extractSourceInfo(responseText);
-            ChatHistory assistantMsg = saveHistory(threadId, "assistant", responseText, srcInfo[0], srcInfo[1]);
+            ChatHistory assistantMsg = saveHistory(threadId, com.xiaofuzi.ai.util.AppConstants.CHAT_ROLE_ASSISTANT, responseText, srcInfo[0], srcInfo[1]);
 
             updateSession(threadId, userId);
 
@@ -142,7 +142,7 @@ public class RagQaAgentService {
 
         //过滤出用户和助手的对话
         List<ChatHistory> relevant = recentHistory.stream()
-                .filter(h -> !"system".equals(h.getRole()))
+                .filter(h -> !com.xiaofuzi.ai.util.AppConstants.CHAT_ROLE_SYSTEM.equals(h.getRole()))
                 .toList();
 
         if (relevant.isEmpty()) {
@@ -153,7 +153,7 @@ public class RagQaAgentService {
         context.append("以下是本次对话的历史记录，请结合历史上下文理解当前问题：\n\n");
 
         for (ChatHistory h : relevant) {
-            String label = "user".equals(h.getRole()) ? "用户" : "助手";
+            String label = com.xiaofuzi.ai.util.AppConstants.CHAT_ROLE_USER.equals(h.getRole()) ? "用户" : "助手";
             context.append("【").append(label).append("】").append(h.getContent()).append("\n\n");
         }
 
@@ -195,7 +195,7 @@ public class RagQaAgentService {
         int msgCount = history.size();
 
         String title = history.stream()
-                .filter(h -> "user".equals(h.getRole()))
+                .filter(h -> com.xiaofuzi.ai.util.AppConstants.CHAT_ROLE_USER.equals(h.getRole()))
                 .findFirst()
                 .map(h -> {
                     String c = h.getContent();

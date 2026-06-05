@@ -36,7 +36,7 @@ public class TxtDocumentParser implements DocumentParser {
 
         logger.info("TXT 文档解析完成，内容长度: {} 字符", content.length());
 
-        Document doc = new Document(content, Map.of("content_type", "text_document"));
+        Document doc = new Document(content, Map.of("content_type", com.xiaofuzi.ai.util.AppConstants.CONTENT_TYPE_TXT));
         return List.of(doc);
     }
 }

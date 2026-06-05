@@ -20,12 +20,14 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import jakarta.annotation.PreDestroy;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.ArrayList;
 import java.util.regex.Matcher;
@@ -48,6 +50,16 @@ public class AgentController {
 
     private static final String DEFAULT_SESSION_TITLE = "新对话";
     private static final String THINKING_MESSAGE = "正在检索知识库...";
+    private static final String DEFAULT_ERROR_MESSAGE = "未知错误";
+
+    private static final String SSE_TYPE_KEY = "type";
+    private static final String SSE_CONTENT_KEY = "content";
+    private static final String SSE_EVENT_THINKING = "thinking";
+    private static final String SSE_EVENT_SEARCH_INFO = "search_info";
+    private static final String SSE_EVENT_VERSION_INFO = "version_info";
+    private static final String SSE_EVENT_TOKEN = "token";
+    private static final String SSE_EVENT_DONE = "done";
+    private static final String SSE_EVENT_ERROR = "error";
 
     private final RagQaAgentService ragQaAgentService;
     private final ChatHistoryMapper chatHistoryMapper;
@@ -113,8 +125,8 @@ public class AgentController {
             try {
                 // 使用 ObjectMapper 显式序列化为 JSON，避免 SseEmitter 内部 toString() 问题
                 String thinkingJson = objectMapper.writeValueAsString(
-                        Map.of("type", "thinking", "content", THINKING_MESSAGE));
-                emitter.send(SseEmitter.event().name("thinking").data(thinkingJson));
+                        Map.of(SSE_TYPE_KEY, SSE_EVENT_THINKING, SSE_CONTENT_KEY, THINKING_MESSAGE));
+                emitter.send(SseEmitter.event().name(SSE_EVENT_THINKING).data(thinkingJson));
 
                 RagQaAgentService.AskResult result = ragQaAgentService.ask(finalThreadId, finalUserId, userMessage);
                 String response = result.response();
@@ -127,8 +139,8 @@ public class AgentController {
                 Map<String, Object> searchInfo = ragQaMessageHook.getLastSearchInfo();
                 if (searchInfo != null) {
                     String searchJson = objectMapper.writeValueAsString(
-                            Map.of("type", "search_info", "content", searchInfo));
-                    emitter.send(SseEmitter.event().name("search_info").data(searchJson));
+                            Map.of(SSE_TYPE_KEY, SSE_EVENT_SEARCH_INFO, SSE_CONTENT_KEY, searchInfo));
+                    emitter.send(SseEmitter.event().name(SSE_EVENT_SEARCH_INFO).data(searchJson));
                 }
 
                 // 推送版本追溯信息给前端
@@ -136,8 +148,8 @@ public class AgentController {
                         userMessage, request.getDepartment(), versionOverrides);
                 if (!versionInfo.isEmpty()) {
                     String versionJson = objectMapper.writeValueAsString(
-                            Map.of("type", "version_info", "content", Map.of("items", versionInfo)));
-                    emitter.send(SseEmitter.event().name("version_info").data(versionJson));
+                            Map.of(SSE_TYPE_KEY, SSE_EVENT_VERSION_INFO, SSE_CONTENT_KEY, Map.of("items", versionInfo)));
+                    emitter.send(SseEmitter.event().name(SSE_EVENT_VERSION_INFO).data(versionJson));
                 }
 
                 // 按句拆分逐句发送
@@ -146,24 +158,25 @@ public class AgentController {
                     if (segment.trim().isEmpty()) continue;
                     Thread.sleep(tokenDelayMs);
                     String tokenJson = objectMapper.writeValueAsString(
-                            Map.of("type", "token", "content", segment));
-                    emitter.send(SseEmitter.event().name("token").data(tokenJson));
+                            Map.of(SSE_TYPE_KEY, SSE_EVENT_TOKEN, SSE_CONTENT_KEY, segment));
+                    emitter.send(SseEmitter.event().name(SSE_EVENT_TOKEN).data(tokenJson));
                 }
 
                 String doneJson = objectMapper.writeValueAsString(
-                        Map.of("type", "done", "content",
+                        Map.of(SSE_TYPE_KEY, SSE_EVENT_DONE, SSE_CONTENT_KEY,
                                 Map.of("threadId", finalThreadId,
                                        "userMsgId", result.userMsgId(),
                                        "assistantMsgId", result.assistantMsgId(),
                                        "suggestions", suggestions)));
-                emitter.send(SseEmitter.event().name("done").data(doneJson));
+                emitter.send(SseEmitter.event().name(SSE_EVENT_DONE).data(doneJson));
                 emitter.complete();
             } catch (Exception e) {
                 logger.error("SSE 流式问答出错", e);
                 try {
                     String errorJson = objectMapper.writeValueAsString(
-                            Map.of("type", "error", "content", e.getMessage() != null ? e.getMessage() : "未知错误"));
-                    emitter.send(SseEmitter.event().name("error").data(errorJson));
+                            Map.of(SSE_TYPE_KEY, SSE_EVENT_ERROR, SSE_CONTENT_KEY,
+                                    e.getMessage() != null ? e.getMessage() : DEFAULT_ERROR_MESSAGE));
+                    emitter.send(SseEmitter.event().name(SSE_EVENT_ERROR).data(errorJson));
                 } catch (Exception ignored) {}
                 emitter.completeWithError(e);
             } finally {
@@ -284,5 +297,18 @@ public class AgentController {
         stripped = SUGGESTIONS_STRIP_WITHOUT_SEP.matcher(stripped).replaceAll("");
         stripped = SUGGESTIONS_STRIP_NO_NEWLINE.matcher(stripped).replaceAll("");
         return stripped;
+    }
+
+    @PreDestroy
+    public void shutdown() {
+        sseExecutor.shutdown();
+        try {
+            if (!sseExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                sseExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            sseExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 }

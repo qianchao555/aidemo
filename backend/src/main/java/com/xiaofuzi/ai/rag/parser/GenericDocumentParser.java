@@ -42,7 +42,7 @@ public class GenericDocumentParser implements DocumentParser {
         String content = handler.toString().trim();
         logger.info("通用文档解析完成，内容长度: {} 字符", content.length());
 
-        Document doc = new Document(content, Map.of("content_type", "generic_document"));
+        Document doc = new Document(content, Map.of("content_type", com.xiaofuzi.ai.util.AppConstants.CONTENT_TYPE_GENERIC));
         return List.of(doc);
     }
 
