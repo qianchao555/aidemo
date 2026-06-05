@@ -20,12 +20,14 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import jakarta.annotation.PreDestroy;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.ArrayList;
 import java.util.regex.Matcher;
@@ -295,5 +297,18 @@ public class AgentController {
         stripped = SUGGESTIONS_STRIP_WITHOUT_SEP.matcher(stripped).replaceAll("");
         stripped = SUGGESTIONS_STRIP_NO_NEWLINE.matcher(stripped).replaceAll("");
         return stripped;
+    }
+
+    @PreDestroy
+    public void shutdown() {
+        sseExecutor.shutdown();
+        try {
+            if (!sseExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                sseExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            sseExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 }

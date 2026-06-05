@@ -352,6 +352,11 @@ public class KnowledgeBaseService {
         return null;
     }
 
+    /** 转义 filter 表达式中的单引号，防止注入攻击 */
+    private static String escapeFilterValue(String value) {
+        return value == null ? "" : value.replace("'", "''");
+    }
+
     /** 检查 Document 元数据中指定 key 是否存在非空字符串值。 */
     private static boolean nonBlankMeta(Document doc, String key) {
         Object val = doc.getMetadata() != null ? doc.getMetadata().get(key) : null;
@@ -424,14 +429,15 @@ public class KnowledgeBaseService {
         //    排除 FAQ 条目：FAQ 走前置精确匹配，不应混入文档检索结果
         //    部门过滤：指定部门时在向量检索阶段按 metadata.department 过滤
 
-        // Build version filter expression
+        // Build version filter expression (escape single quotes to prevent injection)
         String versionFilter;
         if (versionOverrides != null && !versionOverrides.isEmpty()) {
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < versionOverrides.size(); i++) {
                 VersionOverride vo = versionOverrides.get(i);
                 if (i > 0) sb.append(" OR ");
-                sb.append("(group_id == '").append(vo.groupId()).append("' AND version == '").append(vo.version()).append("')");
+                sb.append("(group_id == '").append(escapeFilterValue(vo.groupId()))
+                  .append("' AND version == '").append(escapeFilterValue(vo.version())).append("')");
             }
             versionFilter = sb.toString();
         } else {
@@ -621,16 +627,13 @@ public class KnowledgeBaseService {
                 sqlBuilder.append(" AND (metadata->>'department') = ?");
             }
 
-            // Build version filter for keyword search
+            // Build version filter for keyword search (parameterized to prevent SQL injection)
             StringBuilder versionCondition = new StringBuilder();
             if (versionOverrides != null && !versionOverrides.isEmpty()) {
                 versionCondition.append(" AND (");
                 for (int i = 0; i < versionOverrides.size(); i++) {
-                    VersionOverride vo = versionOverrides.get(i);
                     if (i > 0) versionCondition.append(" OR ");
-                    versionCondition.append(String.format(
-                        "(metadata->>'group_id' = '%s' AND metadata->>'version' = '%s')",
-                        vo.groupId(), vo.version()));
+                    versionCondition.append("(metadata->>'group_id' = ? AND metadata->>'version' = ?)");
                 }
                 versionCondition.append(")");
             } else {
@@ -647,6 +650,12 @@ public class KnowledgeBaseService {
                         ps.setString(idx++, query);
                         if (department != null && !department.isBlank()) {
                             ps.setString(idx++, department);
+                        }
+                        if (versionOverrides != null) {
+                            for (VersionOverride vo : versionOverrides) {
+                                ps.setString(idx++, vo.groupId());
+                                ps.setString(idx++, vo.version());
+                            }
                         }
                         ps.setInt(idx, limit);
                     },

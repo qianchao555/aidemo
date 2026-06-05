@@ -136,9 +136,9 @@ public class FaqController {
     @PostMapping("/faq/import")
     public Result<Map<String, Object>> importFaq(@RequestParam("file") MultipartFile file) {
         List<FaqEntry> entries = new ArrayList<>();
-        try (java.io.InputStream is = file.getInputStream()) {
-            org.apache.poi.ss.usermodel.Workbook workbook =
-                org.apache.poi.ss.usermodel.WorkbookFactory.create(is);
+        try (java.io.InputStream is = file.getInputStream();
+             org.apache.poi.ss.usermodel.Workbook workbook =
+                org.apache.poi.ss.usermodel.WorkbookFactory.create(is)) {
             org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
             for (int i = 1; i <= sheet.getLastRowNum(); i++) {
                 org.apache.poi.ss.usermodel.Row row = sheet.getRow(i);
@@ -155,7 +155,6 @@ public class FaqController {
                     .build();
                 entries.add(entry);
             }
-            workbook.close();
         } catch (Exception e) {
             logger.error("FAQ 导入失败", e);
             return Result.error("文件解析失败: " + e.getMessage());
@@ -193,39 +192,40 @@ public class FaqController {
         if ("xlsx".equalsIgnoreCase(format)) {
             response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
             response.setHeader("Content-Disposition", "attachment; filename=faq_export.xlsx");
-            org.apache.poi.xssf.usermodel.XSSFWorkbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
-            org.apache.poi.xssf.usermodel.XSSFSheet sheet = workbook.createSheet("FAQ");
-            org.apache.poi.xssf.usermodel.XSSFRow header = sheet.createRow(0);
-            header.createCell(0).setCellValue("问题");
-            header.createCell(1).setCellValue("答案");
-            header.createCell(2).setCellValue("分类");
-            header.createCell(3).setCellValue("关键词");
-            int rowIdx = 1;
-            for (FaqEntry f : list) {
-                org.apache.poi.xssf.usermodel.XSSFRow row = sheet.createRow(rowIdx++);
-                row.createCell(0).setCellValue(f.getQuestion());
-                row.createCell(1).setCellValue(f.getAnswer());
-                row.createCell(2).setCellValue(f.getCategory() != null ? f.getCategory() : "");
-                row.createCell(3).setCellValue(f.getKeywords() != null ? f.getKeywords() : "");
+            try (org.apache.poi.xssf.usermodel.XSSFWorkbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
+                org.apache.poi.xssf.usermodel.XSSFSheet sheet = workbook.createSheet("FAQ");
+                org.apache.poi.xssf.usermodel.XSSFRow header = sheet.createRow(0);
+                header.createCell(0).setCellValue("问题");
+                header.createCell(1).setCellValue("答案");
+                header.createCell(2).setCellValue("分类");
+                header.createCell(3).setCellValue("关键词");
+                int rowIdx = 1;
+                for (FaqEntry f : list) {
+                    org.apache.poi.xssf.usermodel.XSSFRow row = sheet.createRow(rowIdx++);
+                    row.createCell(0).setCellValue(f.getQuestion());
+                    row.createCell(1).setCellValue(f.getAnswer());
+                    row.createCell(2).setCellValue(f.getCategory() != null ? f.getCategory() : "");
+                    row.createCell(3).setCellValue(f.getKeywords() != null ? f.getKeywords() : "");
+                }
+                workbook.write(response.getOutputStream());
             }
-            workbook.write(response.getOutputStream());
-            workbook.close();
         } else {
             response.setContentType("text/csv; charset=UTF-8");
             response.setHeader("Content-Disposition", "attachment; filename=faq_export.csv");
             java.io.OutputStream os = response.getOutputStream();
             os.write(new byte[]{(byte) 0xEF, (byte) 0xBB, (byte) 0xBF});
-            java.io.PrintWriter writer = new java.io.PrintWriter(
-                new java.io.OutputStreamWriter(os, java.nio.charset.StandardCharsets.UTF_8));
-            writer.println("问题,答案,分类,关键词");
-            for (FaqEntry f : list) {
-                writer.printf("\"%s\",\"%s\",\"%s\",\"%s\"\n",
-                    escapeCsv(f.getQuestion()),
-                    escapeCsv(f.getAnswer()),
-                    escapeCsv(f.getCategory()),
-                    escapeCsv(f.getKeywords()));
+            try (java.io.PrintWriter writer = new java.io.PrintWriter(
+                new java.io.OutputStreamWriter(os, java.nio.charset.StandardCharsets.UTF_8))) {
+                writer.println("问题,答案,分类,关键词");
+                for (FaqEntry f : list) {
+                    writer.printf("\"%s\",\"%s\",\"%s\",\"%s\"\n",
+                        escapeCsv(f.getQuestion()),
+                        escapeCsv(f.getAnswer()),
+                        escapeCsv(f.getCategory()),
+                        escapeCsv(f.getKeywords()));
+                }
+                writer.flush();
             }
-            writer.flush();
         }
     }
 
