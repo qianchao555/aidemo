@@ -336,6 +336,10 @@ function handleFileChange(file: { raw?: File }) {
 
 async function handleUpload() {
   if (!uploadFile.value) return
+  if (isNewVersion.value && !parentDocumentId.value) {
+    ElMessage.warning('请选择要关联的旧文档')
+    return
+  }
   await store.upload(
     uploadFile.value,
     uploadParserCategory.value || undefined,

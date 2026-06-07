@@ -59,8 +59,10 @@ export const downloadExportFaq = async (category?: string, format: string = 'csv
   const a = document.createElement('a')
   a.href = url
   a.download = format === 'xlsx' ? 'faq_export.xlsx' : 'faq_export.csv'
+  document.body.appendChild(a)
   a.click()
-  URL.revokeObjectURL(url)
+  document.body.removeChild(a)
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 export const getFaqStats = () =>

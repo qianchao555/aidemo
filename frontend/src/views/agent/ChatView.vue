@@ -298,44 +298,18 @@ async function handleSend() {
       throw new Error('SSE not supported')
     }
 
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed) continue
-        if (trimmed.startsWith('data:')) {
-          const jsonStr = trimmed.slice(5).trim()
-          if (!jsonStr) continue
-          try {
-            const event = JSON.parse(jsonStr)
-            handleStreamEvent(event, threadId, assistantMsgId)
-          } catch { /* 忽略解析失败的行 */ }
-        }
-      }
-    }
+    await readSSEStream(response, threadId, assistantMsgId)
   } catch {
     // 流式失败降级为非流式
     chatStore.appendContent(threadId, assistantMsgId, '')
     try {
       const response = await ragQaChat({ userMessage: text, threadId, department: localStorage.getItem('selectedDepartment') || undefined })
       const msgs = chatStore.messages[threadId]
-      if (msgs) {
-        const msg = msgs.find(m => m.id === assistantMsgId)
-        if (msg) {
-          msg.content = response
-          msg.sources = extractSourcesFromText(response)
-          msg.suggestions = extractSuggestionsFromText(response)
-        }
+      const msg = msgs?.find(m => m.id === assistantMsgId)
+      if (msg) {
+        msg.content = response
       }
+      chatStore.finishMessage(threadId, assistantMsgId)
     } catch {
       ElMessage.error('对话请求失败，请重试')
       const msgs = chatStore.messages[threadId]
@@ -353,7 +327,6 @@ async function handleSend() {
 function handleStreamEvent(event: { type: string; content: unknown }, threadId: string, msgId: string) {
   switch (event.type) {
     case 'thinking':
-      // 静默忽略，不显示检索提示文字
       scrollToBottom()
       break
     case 'token':
@@ -416,36 +389,36 @@ function handleStreamEvent(event: { type: string; content: unknown }, threadId: 
   }
 }
 
-function extractSourcesFromText(content: string): { document: string; clause?: string }[] {
-  const sources: { document: string; clause?: string }[] = []
-  const regex = /【出处】(.*?)(?:\n|$)/g
-  let match
-  while ((match = regex.exec(content)) !== null) {
-    const parts = match[1].split('>').map(s => s.trim())
-    sources.push({
-      document: parts[0] || match[1],
-      clause: parts[1] || undefined
-    })
-  }
-  return sources
-}
+async function readSSEStream(response: Response, threadId: string, msgId: string) {
+  const reader = response.body!.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
 
-function extractSuggestionsFromText(content: string): string[] {
-  const match = content.match(/💡\s*您可以继续问[：:]\s*\n?([\s\S]*?)$/)
-  if (!match) return []
-  const items: string[] = []
-  for (const line of match[1].trim().split('\n')) {
-    if (!line.trim()) continue
-    for (const part of line.split(/(?<=[？?])\s*-\s*/)) {
-      const cleaned = part.replace(/^[-\s•\d.、]+/, '').trim()
-      if (cleaned && cleaned.length <= 50) items.push(cleaned)
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+      if (trimmed.startsWith('data:')) {
+        const jsonStr = trimmed.slice(5).trim()
+        if (!jsonStr) continue
+        try {
+          const event = JSON.parse(jsonStr)
+          handleStreamEvent(event, threadId, msgId)
+        } catch { /* ignore parse errors */ }
+      }
     }
   }
-  return items
 }
 
 async function rateMessage(msg: { id: string; rating?: number }, rating: number) {
   const newRating = msg.rating === rating ? 0 : rating
+  const oldRating = msg.rating
   msg.rating = newRating
   const msgId = Number(msg.id)
   if (isNaN(msgId)) return
@@ -453,7 +426,7 @@ async function rateMessage(msg: { id: string; rating?: number }, rating: number)
     await submitFeedback(msgId, newRating)
   } catch {
     ElMessage.error('反馈提交失败')
-    msg.rating = msg.rating === newRating ? undefined : msg.rating
+    msg.rating = oldRating
   }
 }
 
@@ -529,30 +502,7 @@ async function switchSourceVersion(src: MessageSource, version: string, msgId: s
       throw new Error('SSE not supported')
     }
 
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed) continue
-        if (trimmed.startsWith('data:')) {
-          const jsonStr = trimmed.slice(5).trim()
-          if (!jsonStr) continue
-          try {
-            const event = JSON.parse(jsonStr)
-            handleStreamEvent(event, threadId, assistantMsgId)
-          } catch { /* ignore parse errors */ }
-        }
-      }
-    }
+    await readSSEStream(response, threadId, assistantMsgId)
   } catch {
     ElMessage.error('版本切换查询失败')
     const msgs2 = chatStore.messages[threadId]
