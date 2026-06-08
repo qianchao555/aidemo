@@ -7,6 +7,7 @@ import com.xiaofuzi.ai.entity.ChatHistory;
 import com.xiaofuzi.ai.entity.ChatSession;
 import com.xiaofuzi.ai.entity.DocumentGroup;
 import com.xiaofuzi.ai.entity.KnowledgeDocument;
+import com.xiaofuzi.ai.hook.RagQaMessageHook;
 import com.xiaofuzi.ai.mapper.ChatHistoryMapper;
 import com.xiaofuzi.ai.mapper.ChatSessionMapper;
 import com.xiaofuzi.ai.mapper.DocumentGroupMapper;
@@ -70,6 +71,7 @@ public class RagQaAgentService {
         String enrichedQuestion = buildEnrichedQuestion(threadId, question);
 
         try {
+            RagQaMessageHook.setCurrentUserQuery(question);
             AssistantMessage agentResponse = ragQaAgent.call(enrichedQuestion);
             String responseText = agentResponse.getText();
             logger.info("RAG问答完成 | threadId: {} | 响应长度: {} 字符", threadId, responseText.length());
@@ -83,6 +85,8 @@ public class RagQaAgentService {
         } catch (GraphRunnerException e) {
             logger.error("RAG问答执行出错 | threadId: {}", threadId, e);
             throw new RuntimeException("RAG问答执行出错: " + e.getMessage(), e);
+        } finally {
+            RagQaMessageHook.clearCurrentUserQuery();
         }
     }
 

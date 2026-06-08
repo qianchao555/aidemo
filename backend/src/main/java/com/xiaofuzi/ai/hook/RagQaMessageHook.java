@@ -7,6 +7,7 @@ import com.alibaba.cloud.ai.graph.agent.hook.messages.AgentCommand;
 import com.alibaba.cloud.ai.graph.agent.hook.messages.MessagesModelHook;
 import com.xiaofuzi.ai.dto.FaqMatchResult;
 import com.xiaofuzi.ai.rag.KnowledgeRetrievalTools;
+import com.xiaofuzi.ai.service.ChitchatDetector;
 import com.xiaofuzi.ai.service.FaqService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,10 +34,23 @@ public class RagQaMessageHook extends MessagesModelHook {
 
     private static final Logger logger = LoggerFactory.getLogger(RagQaMessageHook.class);
 
-    private final FaqService faqService;
+    private static final ThreadLocal<String> currentUserQuery = new ThreadLocal<>();
 
-    public RagQaMessageHook(FaqService faqService) {
+    public static void setCurrentUserQuery(String query) {
+        currentUserQuery.set(query);
+    }
+
+    public static void clearCurrentUserQuery() {
+        currentUserQuery.remove();
+    }
+
+    private final FaqService faqService;
+    private final ChitchatDetector chitchatDetector;
+
+    public RagQaMessageHook(FaqService faqService,
+                            ChitchatDetector chitchatDetector) {
         this.faqService = faqService;
+        this.chitchatDetector = chitchatDetector;
     }
 
     @Override
@@ -60,6 +74,12 @@ public class RagQaMessageHook extends MessagesModelHook {
         FaqMatchResult faqResult = faqService.match(userQuery);
         if (faqResult.matched()) {
             return handleFaqHit(previousMessages, faqResult);
+        }
+
+        // 闲聊意图检测：命中则注入友好回复指令，不调用 searchKnowledge
+        ChitchatDetector.ChitchatResult chitchatResult = chitchatDetector.detect(userQuery);
+        if (chitchatResult.isChitchat()) {
+            return handleChitchat(previousMessages, chitchatResult.type());
         }
 
         // 非 FAQ：检查上次 searchKnowledge 调用的质量状态
@@ -98,6 +118,18 @@ public class RagQaMessageHook extends MessagesModelHook {
         return new AgentCommand(enriched);
     }
 
+    /** 闲聊意图：注入友好回复指令，不调用 searchKnowledge */
+    private AgentCommand handleChitchat(List<Message> previousMessages,
+                                        ChitchatDetector.ChitchatType type) {
+        List<Message> enriched = new ArrayList<>(previousMessages);
+        String prompt = "【闲聊模式】\n\n"
+                + "用户正在闲聊，请以友好、轻松的语气进行回应，"
+                + "无需调用知识库检索工具。";
+        enriched.add(new SystemMessage(prompt));
+        logger.info("RAG QA Hook: 闲聊检测 type={}", type);
+        return new AgentCommand(enriched);
+    }
+
     /** FAQ 命中时直接注入标准答案，不走 Agent 交互流程 */
     private AgentCommand handleFaqHit(List<Message> previousMessages,
                                       FaqMatchResult faqResult) {
@@ -127,6 +159,10 @@ public class RagQaMessageHook extends MessagesModelHook {
     }
 
     private String extractUserQuery(List<Message> messages) {
+        String query = currentUserQuery.get();
+        if (query != null && !query.isBlank()) {
+            return query;
+        }
         if (messages == null || messages.isEmpty()) {
             return null;
         }

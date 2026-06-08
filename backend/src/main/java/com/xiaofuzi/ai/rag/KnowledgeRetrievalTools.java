@@ -64,11 +64,14 @@ public class KnowledgeRetrievalTools {
         List<Document> docs = doSearch(query, 5, 0.0);
 
         if (docs.isEmpty()) {
-            // ★ 空结果兜底：无任何文档命中
             lastQualityStatus.set(QualityStatus.EMPTY);
-            return "【系统提示】知识库中未找到任何与「" + query + "」相关的文档内容。"
-                    + "你必须直接告知用户未找到相关信息，禁止编造任何内容。"
-                    + "建议用户联系 HR 部门获取帮助。";
+            return "【系统指令-最高优先级】\n"
+                    + "知识库中未找到任何与「" + query + "」相关的文档内容。\n\n"
+                    + "回复模板：\n"
+                    + "抱歉，我未能在知识库中找到与您问题相关的信息。\n\n"
+                    + "建议您：\n"
+                    + "1. 尝试更换关键词重新提问（例如使用更具体的术语或简称）\n"
+                    + "2. 联系 HR 部门获取人工帮助";
         }
 
         // ★ 从 doSearch 中已写入的 ThreadLocal 读取质量状态
@@ -78,10 +81,14 @@ public class KnowledgeRetrievalTools {
             String scoreInfo = score != null
                     ? "，最高综合分仅 " + String.format("%.1f", score.maxCombined())
                     : "";
-            return "【系统提示】检索到的文档内容与用户问题「" + query + "」相关性不足"
-                    + scoreInfo + "。"
-                    + "你必须直接告知用户未找到相关内容，禁止据此编造任何回答。"
-                    + "建议用户：1) 更换关键词重新提问；2) 联系 HR 部门获取帮助。";
+            return "【系统指令-最高优先级】\n"
+                    + "检索到的文档内容与用户问题「" + query + "」相关性不足"
+                    + scoreInfo + "。\n\n"
+                    + "回复模板：\n"
+                    + "抱歉，我未能在知识库中找到与您问题高度相关的内容。\n\n"
+                    + "建议您：\n"
+                    + "1. 尝试更换关键词重新提问（例如使用更具体的术语或简称）\n"
+                    + "2. 联系 HR 部门获取人工帮助";
         }
 
         // ★ 有效召回：正常格式化上下文
