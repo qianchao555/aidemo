@@ -6,7 +6,7 @@ import com.alibaba.cloud.ai.graph.agent.hook.HookPositions;
 import com.alibaba.cloud.ai.graph.agent.hook.messages.AgentCommand;
 import com.alibaba.cloud.ai.graph.agent.hook.messages.MessagesModelHook;
 import com.xiaofuzi.ai.dto.FaqMatchResult;
-import com.xiaofuzi.ai.rag.KnowledgeRetrievalTools;
+import com.xiaofuzi.ai.enums.IntentType;
 import com.xiaofuzi.ai.service.ChitchatDetector;
 import com.xiaofuzi.ai.service.FaqService;
 import org.slf4j.Logger;
@@ -82,39 +82,12 @@ public class RagQaMessageHook extends MessagesModelHook {
             return handleChitchat(previousMessages, chitchatResult.type());
         }
 
-        // 非 FAQ：检查上次 searchKnowledge 调用的质量状态
-        KnowledgeRetrievalTools.QualityStatus qualityStatus =
-                KnowledgeRetrievalTools.getLastQualityStatus();
-
-        if (qualityStatus == KnowledgeRetrievalTools.QualityStatus.EMPTY
-                || qualityStatus == KnowledgeRetrievalTools.QualityStatus.LOW_QUALITY) {
-            return handleLowQuality(previousMessages);
-        }
-
-        // 非 FAQ 且质量通过：交给 Agent 通过 systemPrompt + searchKnowledge 工具自行交互
-        logger.debug("RAG QA Hook: 非FAQ，交由 Agent 交互式处理 | query='{}'", userQuery);
-        return new AgentCommand(previousMessages);
-    }
-
-    /** ★ 质量不足时注入强制兜底指令，覆盖 LLM 其他行为规则 */
-    private AgentCommand handleLowQuality(List<Message> previousMessages) {
+        // 意图标注：识别提问类型，注入对应策略，交给 Agent 处理
+        IntentType intent = IntentType.classify(userQuery);
         List<Message> enriched = new ArrayList<>(previousMessages);
-        Message forcedInstruction = new SystemMessage("""
-                【最高优先级指令 - 覆盖所有其他规则】
-                知识库检索未找到与用户问题匹配的相关信息。
-                你必须严格按照以下模板回复，不得编造、推测、补充任何内容：
-
-                抱歉，我未能在知识库中找到与您问题相关的信息。
-
-                建议您：
-                1. 尝试更换关键词重新提问（例如使用更具体的术语或简称）
-                2. 联系 HR 部门获取人工帮助
-
-                禁止输出任何其他内容。禁止根据常识或训练数据给出回答。""");
-        enriched.add(forcedInstruction);
-        logger.info("RAG QA Hook: 质量兜底触发，注入强制指令");
-        // ★ 清理 ThreadLocal，避免影响后续轮次
-        KnowledgeRetrievalTools.clearQualityStatus();
+        enriched.add(new SystemMessage(buildIntentAnnotation(intent, userQuery)));
+        logger.info("RAG QA Hook: 意图标注 intent={}, 交由 Agent 交互式处理 | query='{}'",
+                intent.getDisplayName(), userQuery);
         return new AgentCommand(enriched);
     }
 
@@ -173,5 +146,23 @@ public class RagQaMessageHook extends MessagesModelHook {
             }
         }
         return null;
+    }
+
+    /** 根据意图识别结果构造标注 SystemMessage */
+    private String buildIntentAnnotation(IntentType intent, String userQuery) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("【意图识别结果 - 已由系统自动标注】\n");
+        sb.append("意图类型：").append(intent.getDisplayName()).append("\n");
+
+        if (intent.isFallback()) {
+            sb.append("回答策略：").append(intent.getAnswerStrategy()).append("\n\n");
+            sb.append("用户问题：").append(userQuery).append("\n\n");
+            sb.append("严格按以上策略执行，禁止调用 searchKnowledge，禁止编造答案。");
+        } else {
+            sb.append("回答策略：").append(intent.getAnswerStrategy()).append("\n\n");
+            sb.append("用户问题：").append(userQuery).append("\n\n");
+            sb.append("请遵守以上策略回答，不必重新判断意图类型。");
+        }
+        return sb.toString();
     }
 }

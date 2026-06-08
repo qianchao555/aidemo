@@ -85,20 +85,6 @@ public class AgentController {
         this.ragQaMessageHook = ragQaMessageHook;
     }
 
-    @PostMapping("/rag-qa/chat")
-    public Result<String> ragQaChat(@RequestBody ContentChatRequest contentChatRequest) {
-        String message = contentChatRequest.getUserMessage();
-        String threadId = contentChatRequest.getThreadId();
-        Long userId = UserContext.get().getId();
-        DepartmentContextHolder.set(contentChatRequest.getDepartment());
-        try {
-            RagQaAgentService.AskResult result = ragQaAgentService.ask(threadId, userId, message);
-            return Result.success(result.response());
-        } finally {
-            DepartmentContextHolder.clear();
-        }
-    }
-
     @PostMapping(value = "/rag-qa/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter ragQaChatStream(@RequestBody ContentChatRequest request) {
         String userMessage = request.getUserMessage();

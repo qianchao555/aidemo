@@ -93,28 +93,6 @@ class AgentControllerIT {
     }
 
     @Test
-    @DisplayName("POST /agent/rag-qa/chat -> 200 返回回答文本")
-    void shouldReturnAnswerOnValidChatRequest() throws Exception {
-        RagQaAgentService.AskResult askResult =
-                new RagQaAgentService.AskResult("这是回答内容", 100L, 101L);
-        when(ragQaAgentService.ask(eq("thread-1"), eq(1L), eq("测试问题")))
-                .thenReturn(askResult);
-
-        ContentChatRequest request = new ContentChatRequest();
-        request.setUserMessage("测试问题");
-        request.setThreadId("thread-1");
-
-        mockMvc.perform(post("/agent/rag-qa/chat")
-                        .header("Authorization", "Bearer test-token")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value(true))
-                .andExpect(jsonPath("$.code").value(200))
-                .andExpect(jsonPath("$.data").value("这是回答内容"));
-    }
-
-    @Test
     @DisplayName("GET /agent/sessions -> 200 返回会话列表")
     void shouldReturnSessionList() throws Exception {
         ChatSession session = ChatSession.builder()

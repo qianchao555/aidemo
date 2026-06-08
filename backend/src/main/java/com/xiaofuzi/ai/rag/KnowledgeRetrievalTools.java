@@ -15,8 +15,8 @@ import java.util.Map;
 /**
  * Agent RAG 知识检索工具类。
  *
- * <p>提供 searchKnowledge 工具供 ReAct Agent 调用，并在检索结果质量不足时
- * 通过 ThreadLocal 向 RagQaMessageHook 传递状态，实现程序化兜底拦截。
+ * <p>提供 searchKnowledge 工具供 ReAct Agent 调用。
+ * 检索质量不足时通过返回值中的系统指令告知 Agent，由 Agent 自行处理兜底。
  */
 @Component
 public class KnowledgeRetrievalTools {
@@ -26,30 +26,15 @@ public class KnowledgeRetrievalTools {
     /** ★ 检索质量状态枚举 */
     public enum QualityStatus { PASSED, EMPTY, LOW_QUALITY }
 
-    /** ★ 最后一次检索的质量状态（ThreadLocal，线程安全） */
-    private static final ThreadLocal<QualityStatus> lastQualityStatus =
-            ThreadLocal.withInitial(() -> QualityStatus.PASSED);
-
-    /** ★ 最后一次检索的质量评分详情（ThreadLocal） */
-    private static final ThreadLocal<QualityScore> lastQualityScore = new ThreadLocal<>();
-    private static final int AGENT_CONTEXT_MAX_LENGTH = 3000;
-
     private final KnowledgeBaseService knowledgeBaseService;
 
     public KnowledgeRetrievalTools(KnowledgeBaseService knowledgeBaseService) {
         this.knowledgeBaseService = knowledgeBaseService;
     }
 
-    /** ★ 供 RagQaMessageHook 读取最后一次检索质量状态 */
-    public static QualityStatus getLastQualityStatus() {
-        return lastQualityStatus.get();
-    }
+    private static final int AGENT_CONTEXT_MAX_LENGTH = 3000;
 
-    /** ★ 供 RagQaMessageHook 清理状态，避免跨轮污染 */
-    public static void clearQualityStatus() {
-        lastQualityStatus.remove();
-        lastQualityScore.remove();
-    }
+    private record SearchResult(List<Document> docs, QualityStatus quality, QualityScore score) {}
 
     @Tool(description = "从本地知识库中检索与查询相关的知识文档。适用场景：需要引用内部资料、专业知识、行业数据时调用")
     public String searchKnowledge(
@@ -57,14 +42,9 @@ public class KnowledgeRetrievalTools {
         logger.info("RAG工具调用 - searchKnowledge: query='{}', department='{}'",
                 query, DepartmentContextHolder.get());
 
-        // ★ 入口处重置状态，避免上轮残留
-        lastQualityStatus.set(QualityStatus.PASSED);
-        lastQualityScore.remove();
+        SearchResult result = doSearch(query, 5, 0.0);
 
-        List<Document> docs = doSearch(query, 5, 0.0);
-
-        if (docs.isEmpty()) {
-            lastQualityStatus.set(QualityStatus.EMPTY);
+        if (result.docs.isEmpty()) {
             return "【系统指令-最高优先级】\n"
                     + "知识库中未找到任何与「" + query + "」相关的文档内容。\n\n"
                     + "回复模板：\n"
@@ -74,12 +54,9 @@ public class KnowledgeRetrievalTools {
                     + "2. 联系 HR 部门获取人工帮助";
         }
 
-        // ★ 从 doSearch 中已写入的 ThreadLocal 读取质量状态
-        QualityStatus status = lastQualityStatus.get();
-        if (status == QualityStatus.LOW_QUALITY) {
-            QualityScore score = lastQualityScore.get();
-            String scoreInfo = score != null
-                    ? "，最高综合分仅 " + String.format("%.1f", score.maxCombined())
+        if (result.quality == QualityStatus.LOW_QUALITY) {
+            String scoreInfo = result.score != null
+                    ? "，最高综合分仅 " + String.format("%.1f", result.score.maxCombined())
                     : "";
             return "【系统指令-最高优先级】\n"
                     + "检索到的文档内容与用户问题「" + query + "」相关性不足"
@@ -91,30 +68,30 @@ public class KnowledgeRetrievalTools {
                     + "2. 联系 HR 部门获取人工帮助";
         }
 
-        // ★ 有效召回：正常格式化上下文
-        return knowledgeBaseService.formatAsContext(docs, AGENT_CONTEXT_MAX_LENGTH);
+        return knowledgeBaseService.formatAsContext(result.docs, AGENT_CONTEXT_MAX_LENGTH);
     }
 
     @SuppressWarnings("unchecked")
-    private List<Document> doSearch(String query, int topK, double threshold) {
+    private SearchResult doSearch(String query, int topK, double threshold) {
         String department = DepartmentContextHolder.get();
         Map<String, Object> result = knowledgeBaseService.hybridSearch(
                 query, topK, threshold, department, null);
 
-        // ★ 读取 hybridSearch 返回的质量状态，写入 ThreadLocal
+        QualityStatus quality = QualityStatus.PASSED;
+        QualityScore score = null;
         String qs = (String) result.get("qualityStatus");
         if (qs != null) {
-            lastQualityStatus.set(QualityStatus.valueOf(qs));
+            quality = QualityStatus.valueOf(qs);
             Object scoreObj = result.get("qualityScore");
             if (scoreObj instanceof QualityScore qScore) {
-                lastQualityScore.set(qScore);
+                score = qScore;
             }
         }
 
         Object docs = result.get("documents");
         if (docs instanceof List) {
-            return (List<Document>) docs;
+            return new SearchResult((List<Document>) docs, quality, score);
         }
-        return Collections.emptyList();
+        return new SearchResult(Collections.emptyList(), quality, score);
     }
 }

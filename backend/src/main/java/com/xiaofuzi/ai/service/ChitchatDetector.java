@@ -121,11 +121,15 @@ public class ChitchatDetector {
         return lower.contains("请假") || lower.contains("报销") || lower.contains("加班")
                 || lower.contains("离职") || lower.contains("入职") || lower.contains("转正")
                 || lower.contains("调岗") || lower.contains("年假") || lower.contains("病假")
+                || lower.contains("产假") || lower.contains("婚假") || lower.contains("调休")
                 || lower.contains("工资") || lower.contains("社保") || lower.contains("公积金")
+                || lower.contains("医保") || lower.contains("养老") || lower.contains("失业")
                 || lower.contains("流程") || lower.contains("制度") || lower.contains("规定")
                 || lower.contains("申请") || lower.contains("审批") || lower.contains("材料")
                 || lower.contains("考核") || lower.contains("绩效") || lower.contains("合同")
                 || lower.contains("福利") || lower.contains("补贴") || lower.contains("培训")
-                || lower.contains("出差") || lower.contains("考勤") || lower.contains("打卡");
+                || lower.contains("出差") || lower.contains("考勤") || lower.contains("打卡")
+                || lower.contains("证明") || lower.contains("标准") || lower.contains("天数")
+                || lower.contains("额度") || lower.contains("津贴");
     }
 }

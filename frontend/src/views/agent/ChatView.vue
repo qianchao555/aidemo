@@ -203,7 +203,7 @@ import { marked } from 'marked'
 import { ElMessage } from 'element-plus'
 import { Delete, Expand, Fold, Plus, CopyDocument, Promotion, Loading, ChatDotRound } from '@element-plus/icons-vue'
 import { useChatStore } from '@/stores/chat'
-import { ragQaChat, ragQaChatStream, submitFeedback } from '@/api/agent'
+import { ragQaChatStream, submitFeedback } from '@/api/agent'
 import type { VersionInfoItem, MessageSource } from '@/types'
 import thumbUpWhite from '@/assets/icons/点赞-白.svg'
 import thumbUpBlack from '@/assets/icons/点赞-黑.svg'
@@ -300,23 +300,11 @@ async function handleSend() {
 
     await readSSEStream(response, threadId, assistantMsgId)
   } catch {
-    // 流式失败降级为非流式
-    chatStore.appendContent(threadId, assistantMsgId, '')
-    try {
-      const response = await ragQaChat({ userMessage: text, threadId, department: localStorage.getItem('selectedDepartment') || undefined })
-      const msgs = chatStore.messages[threadId]
-      const msg = msgs?.find(m => m.id === assistantMsgId)
-      if (msg) {
-        msg.content = response
-      }
-      chatStore.finishMessage(threadId, assistantMsgId)
-    } catch {
-      ElMessage.error('对话请求失败，请重试')
-      const msgs = chatStore.messages[threadId]
-      if (msgs) {
-        const idx = msgs.findIndex(m => m.id === assistantMsgId)
-        if (idx >= 0) msgs.splice(idx, 1)
-      }
+    ElMessage.error('对话请求失败，请重试')
+    const msgs = chatStore.messages[threadId]
+    if (msgs) {
+      const idx = msgs.findIndex(m => m.id === assistantMsgId)
+      if (idx >= 0) msgs.splice(idx, 1)
     }
   } finally {
     sending.value = false

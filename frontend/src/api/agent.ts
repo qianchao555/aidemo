@@ -24,10 +24,6 @@ export const authLogout = () =>
 export const authMe = () =>
   get<LoginResponse>('/auth/me')
 
-/** 非流式 RAG 问答（保留兼容） */
-export const ragQaChat = (data: ChatParams) =>
-  post<string>('/agent/rag-qa/chat', data)
-
 /** SSE 流式问答 — 返回原生 fetch Response 供 ReadableStream 消费 */
 export const ragQaChatStream = (data: ChatParams): Promise<Response> =>
   fetch('/agent/rag-qa/chat/stream', {

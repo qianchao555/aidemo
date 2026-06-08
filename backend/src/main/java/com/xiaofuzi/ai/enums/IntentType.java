@@ -63,7 +63,8 @@ public enum IntentType {
             null,
             null,
             5, 0.0,
-            "基于参考材料如实回答，不确定就说不知道"
+            "问题不够具体，请反问用户最多2个关键问题来澄清意图"
+//            "问题不够具体，请反问用户最多2个关键问题来澄清意图，不调用 searchKnowledge"
     );
 
     private final String displayName;

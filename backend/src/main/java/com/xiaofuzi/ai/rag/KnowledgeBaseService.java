@@ -525,14 +525,15 @@ public class KnowledgeBaseService {
         double rrfSum = 0;
         double llmSum = 0;
         int count = 0;
+        boolean hasLlmScores = false;
 
         for (Document doc : docs) {
             if (doc.getMetadata() == null) continue;
             double rrf = parseMetaDouble(doc.getMetadata().get("rrf_score"));
             double llm = parseMetaDouble(doc.getMetadata().get("llm_score"));
+            if (llm > 0) hasLlmScores = true;
             double combined = llm * 10 + rrf * 100;
             if (combined > maxCombined) maxCombined = combined;
-            // LLM ≥ qualityLlmThreshold 且 RRF ≥ qualityRrfThreshold → 有效召回
             if (llm >= qualityLlmThreshold && rrf >= qualityRrfThreshold) passCount++;
             rrfSum += rrf;
             llmSum += llm;
@@ -541,7 +542,9 @@ public class KnowledgeBaseService {
 
         double rrfAvg = count > 0 ? rrfSum / count : 0;
         double llmAvg = count > 0 ? llmSum / count : 0;
-        return new QualityScore(maxCombined, rrfAvg, llmAvg, passCount);
+        // LLM 重排未触发时（候选 ≤ rerankTopN），跳过质量门槛，信任 RRF 融合结果
+        int effectivePassCount = hasLlmScores ? passCount : count;
+        return new QualityScore(maxCombined, rrfAvg, llmAvg, effectivePassCount);
     }
 
     /** 安全地将 metadata Object 转为 double，支持 String 和 Number 类型 */
