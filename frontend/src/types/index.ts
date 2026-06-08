@@ -174,6 +174,7 @@ export interface KnowledgeStats {
 export interface FaqCandidate {
   question: string
   frequency: number
+  suggestedKeywords?: string
 }
 
 /** 用户 */

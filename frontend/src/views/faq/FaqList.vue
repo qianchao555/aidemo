@@ -116,7 +116,7 @@
               <span class="discover-rank">{{ idx + 1 }}</span>
               <span class="discover-question" :title="item.question">{{ item.question }}</span>
               <span class="discover-freq">{{ item.frequency }} 次</span>
-              <el-button link size="small" class="detail-link" @click.stop="createFromCandidate(item.question)">
+              <el-button link size="small" class="detail-link" @click.stop="createFromCandidate(item)">
                 创建 FAQ
               </el-button>
             </div>
@@ -369,9 +369,15 @@ async function handleDelete(id: number) {
 const candidateExpanded = ref(false)
 const minFrequency = ref(3)
 function loadCandidates() { store.fetchCandidates(20, minFrequency.value) }
-function createFromCandidate(question: string) {
+function createFromCandidate(item: { question: string; frequency: number; suggestedKeywords?: string }) {
   similarFaqs.value = []
-  formData.value = { question, answer: '', keywords: '', category: '', status: 'active' }
+  formData.value = {
+    question: item.question,
+    answer: '',
+    keywords: item.suggestedKeywords || '',
+    category: '',
+    status: 'active'
+  }
   isEdit.value = false; editId.value = null
   dialogVisible.value = true
 }

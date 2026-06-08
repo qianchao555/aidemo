@@ -39,6 +39,11 @@ public class FaqService {
     @Value("${app.faq.similarity-threshold:0.7}")
     private double similarityThreshold;
 
+    @Value("${app.faq.semantic-match-threshold:0.70}")
+    private double semanticMatchThreshold;
+
+    private final Map<Long, float[]> faqEmbeddingCache = new java.util.concurrent.ConcurrentHashMap<>();
+
     private static final String DEFAULT_FAQ_SOURCE = "FAQ 标准答案";
 
     public FaqService(FaqEntryMapper faqEntryMapper, ChatHistoryMapper chatHistoryMapper,
@@ -113,8 +118,56 @@ public class FaqService {
             logger.info("FAQ 关键词命中: '{}'", keywordMatch.getQuestion());
             return FaqMatchResult.hit(keywordMatch, "keyword");
         }
+
+        //语义匹配FAQ库中的问题（第四级兜底）
+        FaqEntry semantic = semanticMatch(userQuery, allActive);
+        if (semantic != null) {
+            incrementHitFaq(semantic);
+            logger.info("FAQ 语义命中: '{}' ← query='{}'", semantic.getQuestion(), userQuery);
+            return FaqMatchResult.hit(semantic, "semantic");
+        }
+
         //未匹配FAQ库中的问题
         return FaqMatchResult.noMatch();
+    }
+
+    private FaqEntry semanticMatch(String userQuery, List<FaqEntry> allActive) {
+        float[] queryVec;
+        try {
+            queryVec = embeddingModel.embed(userQuery);
+        } catch (Exception e) {
+            logger.warn("FAQ 语义匹配: embedding 调用失败", e);
+            return null;
+        }
+
+        double bestSim = 0;
+        FaqEntry bestEntry = null;
+
+        for (FaqEntry entry : allActive) {
+            float[] entryVec = getOrComputeFaqEmbedding(entry);
+            if (entryVec == null) continue;
+            double sim = cosineSimilarity(queryVec, entryVec);
+            if (sim > bestSim) {
+                bestSim = sim;
+                bestEntry = entry;
+            }
+        }
+
+        if (bestSim > semanticMatchThreshold && bestEntry != null) {
+            return bestEntry;
+        }
+        return null;
+    }
+
+    private float[] getOrComputeFaqEmbedding(FaqEntry entry) {
+        return faqEmbeddingCache.computeIfAbsent(entry.getId(), id -> {
+            try {
+                return embeddingModel.embed(entry.getQuestion());
+            } catch (Exception e) {
+                logger.warn("FAQ embedding 缓存计算失败: id={}", id, e);
+                return null;
+            }
+        });
     }
 
 
@@ -123,6 +176,7 @@ public class FaqService {
         faqEntryMapper.insert(entry);
         logger.info("FAQ 新增: id={} question='{}'", entry.getId(), entry.getQuestion());
         syncToVectorStore(entry);
+        faqEmbeddingCache.remove(entry.getId());
         return entry;
     }
 
@@ -130,11 +184,13 @@ public class FaqService {
         faqEntryMapper.update(entry);
         logger.info("FAQ 更新: id={} question='{}'", entry.getId(), entry.getQuestion());
         syncToVectorStore(entry);
+        faqEmbeddingCache.remove(entry.getId());
         return entry;
     }
 
     public void delete(Long id) {
         faqEntryMapper.deleteById(id);
+        faqEmbeddingCache.remove(id);
         logger.info("FAQ 删除(软删除): id={}", id);
     }
 
@@ -217,6 +273,10 @@ public class FaqService {
             Map<String, Object> candidate = new LinkedHashMap<>();
             candidate.put("question", cluster.representative);
             candidate.put("frequency", cluster.totalFreq);
+            List<String> suggestedKeywords = cluster.getSuggestedKeywords();
+            if (!suggestedKeywords.isEmpty()) {
+                candidate.put("suggestedKeywords", String.join(", ", suggestedKeywords));
+            }
             candidates.add(candidate);
         }
 
@@ -233,25 +293,35 @@ public class FaqService {
     /** 语义簇：包含簇内所有 query 的索引、质心向量、代表问题和总频次 */
     private static class SemanticCluster {
         final List<Integer> memberIndices = new ArrayList<>();
+        final List<String> memberQueries = new ArrayList<>();
         float[] centroid;
         String representative;
         long totalFreq;
 
         SemanticCluster(int firstIdx, float[] firstVec, String query, long freq) {
             this.memberIndices.add(firstIdx);
-            this.centroid = firstVec.clone(); // 初始质心 = 第一条 query 的向量
+            this.memberQueries.add(query);
+            this.centroid = firstVec.clone();
             this.representative = query;
             this.totalFreq = freq;
         }
 
         /** 按频次加权更新质心：new_centroid = (n * old + freq * newVec) / (n + freq) */
-        void addMember(int idx, float[] vec, long freq) {
+        void addMember(int idx, float[] vec, String query, long freq) {
             long totalWeight = totalFreq + freq;
             for (int d = 0; d < centroid.length; d++) {
                 centroid[d] = (centroid[d] * totalFreq + vec[d] * freq) / totalWeight;
             }
             memberIndices.add(idx);
+            memberQueries.add(query);
             totalFreq += freq;
+        }
+
+        List<String> getSuggestedKeywords() {
+            return memberQueries.stream()
+                    .filter(q -> !q.equals(representative))
+                    .distinct()
+                    .collect(Collectors.toList());
         }
     }
 
@@ -300,8 +370,7 @@ public class FaqService {
             }
 
             if (bestSim > clusterThreshold && bestCluster >= 0) {
-                // 归入已有簇，按频次加权更新质心
-                clusters.get(bestCluster).addMember(i, vec, qf.freq);
+                clusters.get(bestCluster).addMember(i, vec, qf.query, qf.freq);
             } else {
                 // 相似度不足，新建簇
                 clusters.add(new SemanticCluster(i, vec, qf.query, qf.freq));

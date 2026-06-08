@@ -77,6 +77,7 @@ app:
     cluster-threshold: 0.85  # 语义聚类相似度阈值
     coverage-threshold: 0.85  # 已覆盖过滤阈值
     similarity-threshold: 0.7  # 相似检测阈值
+    semantic-match-threshold: 0.70  # 语义匹配阈值（第四级兜底，低于聚类/覆盖的0.85，高于相似检测的0.7）
     embedding-batch-size: 50  # FAQ embedding 批次大小
   workspace:
     path: ./workspace  # 文件系统工具工作目录

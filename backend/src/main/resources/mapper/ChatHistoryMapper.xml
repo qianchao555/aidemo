@@ -47,10 +47,12 @@
     </update>
 
     <select id="findUserQueryFrequencies" resultType="java.util.HashMap">
-        SELECT TRIM(content) AS query, COUNT(*) AS cnt
+        SELECT
+            LOWER(REGEXP_REPLACE(TRIM(content), '[？?!！。，,、；;：:　 ]', '', 'g')) AS query,
+            COUNT(*) AS cnt
         FROM chat_history
         WHERE role = 'user'
-        GROUP BY TRIM(content)
+        GROUP BY LOWER(REGEXP_REPLACE(TRIM(content), '[？?!！。，,、；;：:　 ]', '', 'g'))
         HAVING COUNT(*) >= 2
         ORDER BY cnt DESC
     </select>

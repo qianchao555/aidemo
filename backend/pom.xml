@@ -68,6 +68,7 @@
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-crypto</artifactId>
+<!--            <version>6.5.7</version>-->
         </dependency>
 
         <dependency>
@@ -124,18 +125,18 @@
 
 <!--        MCP client、server-->
 <!--        支持 STDIO、Servlet-SSE、Streamable HTTP、Stateless Streamable HTTP-->
-        <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-starter-mcp-client</artifactId>
-<!--            <version>2.0.0-M4</version>-->
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>org.springframework.ai</groupId>-->
+<!--            <artifactId>spring-ai-starter-mcp-client</artifactId>-->
+<!--&lt;!&ndash;            <version>2.0.0-M4</version>&ndash;&gt;-->
+<!--        </dependency>-->
 
         <!--        基于 WebFlux 的 SSE 和 Streamable HTTP 启动器提供自动配置，包括会话、传输、客户端实例等-->
-        <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-starter-mcp-client-webflux</artifactId>
-<!--            <version>2.0.0-M4</version>-->
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>org.springframework.ai</groupId>-->
+<!--            <artifactId>spring-ai-starter-mcp-client-webflux</artifactId>-->
+<!--&lt;!&ndash;            <version>2.0.0-M4</version>&ndash;&gt;-->
+<!--        </dependency>-->
 
         <!-- MCP Server WebMVC：工具已改用 @Tool 注解，暂不需要 MCP Server 对外暴露 -->
         <!--
@@ -147,18 +148,18 @@
         -->
 
 
-        <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-starter-mcp-server</artifactId>
-<!--            <version>2.0.0-M4</version>-->
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>org.springframework.ai</groupId>-->
+<!--            <artifactId>spring-ai-starter-mcp-server</artifactId>-->
+<!--&lt;!&ndash;            <version>2.0.0-M4</version>&ndash;&gt;-->
+<!--        </dependency>-->
 
         <!-- 显式声明 MCP SDK 版本，覆盖 spring-ai-alibaba-agent-framework 传递引入的旧版本 -->
-        <dependency>
-            <groupId>io.modelcontextprotocol.sdk</groupId>
-            <artifactId>mcp</artifactId>
-            <version>2.0.0-M2</version>
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>io.modelcontextprotocol.sdk</groupId>-->
+<!--            <artifactId>mcp</artifactId>-->
+<!--            <version>2.0.0-M2</version>-->
+<!--        </dependency>-->
 
 <!--        <dependency>-->
 <!--            <groupId>com.github.victools</groupId>-->
