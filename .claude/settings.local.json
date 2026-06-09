@@ -57,7 +57,10 @@
       "Bash(npx vite *)",
       "Bash(mvn test-compile *)",
       "Bash(mvn test *)",
-      "Bash(mvn verify *)"
+      "Bash(mvn verify *)",
+      "Bash(pip show *)",
+      "Bash(pip install *)",
+      "Bash(C:/softwareWork/Python/python.exe *)"
     ]
   }
 }
