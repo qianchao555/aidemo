@@ -10,20 +10,20 @@ import java.util.regex.Pattern;
  */
 public enum IntentType {
 
-    POLICY_QA(
-            "制度问答",
-            Pattern.compile("(?:制度|规定|条例|政策|办法|规范|标准|章程|守则|准则)"),
-            Pattern.compile("第[一二三四五六七八九十百千万\\d]+[章节条]"),
-            5, 0.0,
-            "逐条列出制度条款，注明出处，结构清晰"
-    ),
-
     PROCESS_GUIDE(
             "流程指引",
             Pattern.compile("(?:怎么[做办弄]|如何|怎样|流程|步骤|手续|途径|方法|怎么办|咋[做办弄]|去哪|在哪里|在哪儿|找谁)"),
             Pattern.compile("(?:申请|提交|审批|办理|处理|操作|执行|报销|请假|出差|入职|离职|转正|调岗)"),
             3, 0.0,
             "按步骤分点说明流程，标注每个步骤的依据"
+    ),
+
+    POLICY_QA(
+            "制度问答",
+            Pattern.compile("(?:制度|规定|条例|政策|办法|规范|标准|章程|守则|准则)"),
+            Pattern.compile("第[一二三四五六七八九十百千万\\d]+[章节条]"),
+            5, 0.0,
+            "逐条列出制度条款，注明出处，结构清晰"
     ),
 
     DEFINITION(
@@ -63,8 +63,7 @@ public enum IntentType {
             null,
             null,
             5, 0.0,
-            "问题不够具体，请反问用户最多2个关键问题来澄清意图"
-//            "问题不够具体，请反问用户最多2个关键问题来澄清意图，不调用 searchKnowledge"
+            "先调用 searchKnowledge 检索相关文档，基于检索结果给出精准回答。检索结果为空时如实告知，问题确实模糊时可反问用户最多1个关键问题"
     );
 
     private final String displayName;
