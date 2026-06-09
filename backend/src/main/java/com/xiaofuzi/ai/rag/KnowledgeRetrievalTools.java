@@ -28,13 +28,27 @@ public class KnowledgeRetrievalTools {
 
     private final KnowledgeBaseService knowledgeBaseService;
 
+    /**
+     * ThreadLocal 存储最近一次检索的元信息，供 SSE 流 search_info 事件使用。
+     * 格式：{searchMode, vectorCount, keywordCount, mergedCount, intent}
+     */
+    private static final ThreadLocal<Map<String, Object>> lastSearchInfoHolder = new ThreadLocal<>();
+
+    /** 获取并清除当前线程最近一次检索的元信息 */
+    public static Map<String, Object> consumeLastSearchInfo() {
+        Map<String, Object> info = lastSearchInfoHolder.get();
+        lastSearchInfoHolder.remove();
+        return info;
+    }
+
     public KnowledgeRetrievalTools(KnowledgeBaseService knowledgeBaseService) {
         this.knowledgeBaseService = knowledgeBaseService;
     }
 
     private static final int AGENT_CONTEXT_MAX_LENGTH = 3000;
 
-    private record SearchResult(List<Document> docs, QualityStatus quality, QualityScore score) {}
+    private record SearchResult(List<Document> docs, QualityStatus quality, QualityScore score,
+                                 int vectorCount, int keywordCount, int mergedCount) {}
 
     @Tool(description = "从本地知识库中检索与查询相关的知识文档。适用场景：需要引用内部资料、专业知识、行业数据时调用")
     public String searchKnowledge(
@@ -43,6 +57,13 @@ public class KnowledgeRetrievalTools {
                 query, DepartmentContextHolder.get());
 
         SearchResult result = doSearch(query, 5, 0.0);
+
+        // ★ 存储本次检索元信息供 SSE 事件使用
+        lastSearchInfoHolder.set(Map.of(
+                "searchMode", "hybrid",
+                "vectorCount", result.vectorCount,
+                "keywordCount", result.keywordCount,
+                "mergedCount", result.mergedCount));
 
         if (result.docs.isEmpty()) {
             return "【系统指令-最高优先级】\n"
@@ -88,10 +109,19 @@ public class KnowledgeRetrievalTools {
             }
         }
 
+        int vc = toInt(result.get("vectorCount"));
+        int kc = toInt(result.get("keywordCount"));
+        int mc = toInt(result.get("mergedCount"));
+
         Object docs = result.get("documents");
         if (docs instanceof List) {
-            return new SearchResult((List<Document>) docs, quality, score);
+            return new SearchResult((List<Document>) docs, quality, score, vc, kc, mc);
         }
-        return new SearchResult(Collections.emptyList(), quality, score);
+        return new SearchResult(Collections.emptyList(), quality, score, vc, kc, mc);
+    }
+
+    private static int toInt(Object val) {
+        if (val instanceof Number n) return n.intValue();
+        return 0;
     }
 }

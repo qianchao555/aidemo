@@ -254,11 +254,13 @@ function relativeTime(dateStr: string): string {
 
 function renderContent(text: string): string {
   // 去掉答案中的 【出处】... 标记（已在引用气泡中展示）
+  // 支持同行「【出处】doc > path」和换行「【出处】\n- doc > path」两种格式
   // ★ 同时去掉「💡 您可以继续问：」段落（改为 Chips 渲染，避免重复显示）
   const cleaned = text
-    .replace(/【出处】.*?(\n|$)/g, '')
-    .replace(/\n?---?\n💡\s*您可以继续问[：:][\s\S]*$/g, '')  // 带 --- 分隔线的建议段落
-    .replace(/\n💡\s*您可以继续问[：:][\s\S]*$/g, '')  // 无分隔线的建议段落（兜底）
+    .replace(/【出处】\s*(\n[-•\s]*[\s\S]*?)(?=\n\n|\n【出处】|\n💡|$)/g, '')
+    .replace(/【出处】.*?(\n|$)/g, '')  // 兜底：同行格式
+    .replace(/\n?---?\n💡\s*您可以继续问[：:][\s\S]*$/g, '')
+    .replace(/\n💡\s*您可以继续问[：:][\s\S]*$/g, '')
     .replace(/\n{3,}/g, '\n\n')
   return marked.parse(cleaned, { async: false }) as string
 }

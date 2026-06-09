@@ -52,14 +52,47 @@ export const useChatStore = defineStore('chat', () => {
 
   function extractSources(content: string): MessageSource[] {
     const sources: MessageSource[] = []
-    const regex = /【出处】(.*?)(?:\n|$)/g
-    let match
-    while ((match = regex.exec(content)) !== null) {
-      const parts = match[1].split('>').map(s => s.trim())
-      sources.push({
-        document: parts[0] || match[1],
-        clause: parts[1] || undefined
-      })
+    // 匹配【出处】后的内容，支持：
+    //   1. 同行：「【出处】doc > path」
+    //   2. 换行：「【出处】\n- doc > path」或「【出处】\ndoc > path」
+    //   3. 合并：「【出处】doc1 > path1、doc2 > path2」
+    const markerRegex = /【出处】\s*/g
+    let markerMatch
+    while ((markerMatch = markerRegex.exec(content)) !== null) {
+      const afterMarker = content.substring(markerMatch.index + markerMatch[0].length)
+
+      // 找出该标记后直到下一个【出处】或文末的内容
+      const nextMarkerIdx = afterMarker.search(/【出处】/)
+      const block = nextMarkerIdx >= 0
+        ? afterMarker.substring(0, nextMarkerIdx)
+        : afterMarker
+
+      // 从 block 中提取所有引用行（支持 - item 列表和纯文本行）
+      const itemLines = block.split('\n')
+        .map(l => l.replace(/^[-\s•\d.]*/, '').trim())
+        .filter(l => l.length > 0 && l.includes('>'))
+
+      if (itemLines.length > 0) {
+        for (const line of itemLines) {
+          const parts = line.split('>').map(s => s.trim())
+          sources.push({
+            document: parts[0] || '',
+            clause: parts.slice(1).join(' > ') || undefined
+          })
+        }
+      } else {
+        // 回退：尝试同行解析（兼容无 > 分隔符的旧格式）
+        const firstLine = block.split('\n')[0].trim()
+        if (firstLine) {
+          const parts = firstLine.split('>').map(s => s.trim())
+          if (parts[0]) {
+            sources.push({
+              document: parts[0],
+              clause: parts.slice(1).join(' > ') || undefined
+            })
+          }
+        }
+      }
     }
     return sources
   }

@@ -121,9 +121,9 @@ public class AgentController {
                 List<String> suggestions = extractSuggestions(response);
                 String cleanResponse = suggestions.isEmpty() ? response : stripSuggestions(response);
 
-                // 推送检索元信息给前端展示
-                Map<String, Object> searchInfo = ragQaMessageHook.getLastSearchInfo();
-                if (searchInfo != null) {
+                // ★ 推送检索元信息：从 KnowledgeRetrievalTools ThreadLocal 获取
+                Map<String, Object> searchInfo = com.xiaofuzi.ai.rag.KnowledgeRetrievalTools.consumeLastSearchInfo();
+                if (searchInfo != null && !searchInfo.isEmpty()) {
                     String searchJson = objectMapper.writeValueAsString(
                             Map.of(SSE_TYPE_KEY, SSE_EVENT_SEARCH_INFO, SSE_CONTENT_KEY, searchInfo));
                     emitter.send(SseEmitter.event().name(SSE_EVENT_SEARCH_INFO).data(searchJson));
