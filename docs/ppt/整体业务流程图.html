@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>整体业务流程图 — 制度问答与流程指引助手</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0d1117;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 40px 20px;
+  }
+  h1 {
+    font-size: 28px;
+    color: #fff;
+    margin-bottom: 6px;
+    text-align: center;
+  }
+  .subtitle {
+    font-size: 15px;
+    color: #888;
+    margin-bottom: 36px;
+    text-align: center;
+  }
+
+  .flow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0;
+    max-width: 1200px;
+  }
+
+  .node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    width: 170px;
+  }
+  .node .icon {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 36px;
+    margin-bottom: 10px;
+    border: 3px solid;
+  }
+  .node .label {
+    font-weight: 700;
+    font-size: 16px;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+  .node .desc {
+    font-size: 12px;
+    color: #888;
+    line-height: 1.5;
+  }
+
+  /* 各节点配色 */
+  .n-ask .icon { background: rgba(233,69,96,0.15); border-color: #e94560; }
+  .n-ask .label { color: #e94560; }
+
+  .n-faq .icon { background: rgba(76,175,80,0.15); border-color: #4caf50; }
+  .n-faq .label { color: #4caf50; }
+
+  .n-understand .icon { background: rgba(33,150,243,0.15); border-color: #2196f3; }
+  .n-understand .label { color: #2196f3; }
+
+  .n-search .icon { background: rgba(240,192,64,0.15); border-color: #f0c040; }
+  .n-search .label { color: #f0c040; }
+
+  .n-answer .icon { background: rgba(156,39,176,0.15); border-color: #9c27b0; }
+  .n-answer .label { color: #9c27b0; }
+
+  .n-output .icon { background: rgba(0,188,212,0.15); border-color: #00bcd4; }
+  .n-output .label { color: #00bcd4; }
+
+  /* 箭头 */
+  .arrow {
+    display: flex;
+    align-items: center;
+    font-size: 28px;
+    font-weight: bold;
+    margin: 0 4px;
+    color: #555;
+    min-width: 40px;
+    justify-content: center;
+  }
+
+  /* 分支 */
+  .branches {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+
+  /* 分隔线 */
+  .divider {
+    width: 100%;
+    max-width: 1000px;
+    height: 1px;
+    background: rgba(255,255,255,0.06);
+    margin: 40px 0;
+  }
+
+  /* 底部三列 */
+  .bottom-section {
+    text-align: center;
+    max-width: 900px;
+  }
+  .bottom-section h2 {
+    font-size: 18px;
+    color: #fff;
+    margin-bottom: 24px;
+  }
+  .three-col {
+    display: flex;
+    gap: 24px;
+  }
+  .col {
+    flex: 1;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+  }
+  .col .col-icon { font-size: 32px; margin-bottom: 8px; }
+  .col h3 { font-size: 15px; color: #fff; margin-bottom: 8px; }
+  .col p { font-size: 12px; color: #888; line-height: 1.6; }
+
+  /* 分支路径 */
+  .branch-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .branch-options {
+    display: flex;
+    gap: 60px;
+    margin-top: 4px;
+  }
+  .branch-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .branch-tag {
+    padding: 6px 18px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .tag-hit { background: rgba(76,175,80,0.2); color: #4caf50; border: 1px solid rgba(76,175,80,0.3); }
+  .tag-miss { background: rgba(244,67,54,0.15); color: #f44336; border: 1px solid rgba(244,67,54,0.25); }
+  .branch-result {
+    font-size: 11px;
+    color: #666;
+    margin-top: 2px;
+  }
+
+  .footer {
+    margin-top: 40px;
+    font-size: 12px;
+    color: #444;
+  }
+</style>
+</head>
+<body>
+
+<h1>制度问答与流程指引助手</h1>
+<p class="subtitle">整体业务流程</p>
+
+<div class="flow">
+  <!-- 节点1：员工提问 -->
+  <div class="node n-ask">
+    <div class="icon">💬</div>
+    <div class="label">员工提问</div>
+    <div class="desc">年假怎么算？<br>请假需要什么？<br>实习生能报销吗？</div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <!-- 节点2：FAQ匹配 -->
+  <div class="node n-faq">
+    <div class="icon">🔍</div>
+    <div class="label">FAQ 匹配</div>
+    <div class="desc">常见问题<br>快速匹配<br>已有标准答案</div>
+  </div>
+</div>
+
+<!-- FAQ 分支 -->
+<div class="branch-container" style="margin:8px 0;">
+  <div class="branch-options">
+    <div class="branch-item">
+      <div class="branch-tag tag-hit">✅ 匹配成功</div>
+      <div class="branch-result">直接返回标准答案</div>
+    </div>
+    <div class="branch-item">
+      <div class="branch-tag tag-miss">❌ 未匹配</div>
+      <div class="branch-result">进入智能理解</div>
+    </div>
+  </div>
+</div>
+
+<!-- 匹配成功直接跳答案 -->
+<div style="text-align:center;margin:6px 0;">
+  <span style="color:#4caf50;font-size:20px;">↓</span>
+</div>
+
+<div class="flow" style="margin-bottom:20px;">
+  <div class="node n-answer">
+    <div class="icon">📋</div>
+    <div class="label">输出答案</div>
+    <div class="desc">带出处标注<br>+ 追问建议</div>
+  </div>
+</div>
+
+<!-- 未匹配路径 -->
+<div style="text-align:center;margin:6px 0;">
+  <span style="color:#f44336;font-size:20px;">↓ 未匹配时继续 ↓</span>
+</div>
+
+<div class="flow">
+  <!-- 节点3：意图理解 -->
+  <div class="node n-understand">
+    <div class="icon">🧠</div>
+    <div class="label">意图理解</div>
+    <div class="desc">判断用户想问什么<br>制度查询？流程指引？<br>对比？定义？</div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <!-- 节点4：知识检索 -->
+  <div class="node n-search">
+    <div class="icon">📚</div>
+    <div class="label">知识检索</div>
+    <div class="desc">从制度文档库中<br>检索相关条款<br>向量 + 关键词</div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <!-- 节点5：AI生成 -->
+  <div class="node n-answer">
+    <div class="icon">✨</div>
+    <div class="label">AI 生成回答</div>
+    <div class="desc">基于检索到的制度条款<br>组织语言生成答案<br>不编造、有出处</div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <!-- 节点6：输出 -->
+  <div class="node n-output">
+    <div class="icon">📤</div>
+    <div class="label">流式输出</div>
+    <div class="desc">逐字返回答案<br>标注引用出处<br>推荐追问</div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- 底部三列 -->
+<div class="bottom-section">
+  <h2>系统三大核心能力</h2>
+  <div class="three-col">
+    <div class="col">
+      <div class="col-icon">📖</div>
+      <h3>制度精准问答</h3>
+      <p>基于制度原文检索，每句回答都有出处可查，杜绝 AI 编造</p>
+    </div>
+    <div class="col">
+      <div class="col-icon">🔄</div>
+      <h3>流程分步指引</h3>
+      <p>多轮对话引导，逐步告知操作步骤、所需材料、时间节点</p>
+    </div>
+    <div class="col">
+      <div class="col-icon">🛡</div>
+      <h3>知识安全兜底</h3>
+      <p>知识库没有的内容如实告知，不瞎编，引导联系 HR 获取帮助</p>
+    </div>
+  </div>
+</div>
+
+
+</body>
+</html>

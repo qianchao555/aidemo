@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>核心业务决策流程图 — 制度问答与流程指引助手</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0d1117;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 28px 20px;
+  }
+  h1 {
+    font-size: 24px;
+    color: #fff;
+    margin-bottom: 4px;
+    text-align: center;
+  }
+  .subtitle {
+    font-size: 14px;
+    color: #888;
+    margin-bottom: 20px;
+    text-align: center;
+  }
+  .diagram {
+    width: 100%;
+    max-width: 1100px;
+    font-size: 13px;
+  }
+
+  /* 步骤容器 */
+  .step-block {
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 0;
+  }
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .step-num {
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-weight: 700;
+    font-size: 12px;
+    color: #1a1a2e;
+  }
+  .step-title { font-weight: 700; font-size: 15px; }
+  .step-method { font-size: 11px; opacity: 0.7; }
+
+  .arrow-down { text-align: center; font-size: 20px; font-weight: bold; padding: 3px 0; }
+
+  /* 起点终点 */
+  .endpoint {
+    text-align: center;
+    margin: 0 0;
+  }
+  .endpoint .node {
+    display: inline-block;
+    padding: 10px 30px;
+    border-radius: 10px;
+    color: #fff;
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .node-start { background: #e94560; }
+  .node-end { background: #4caf50; border-radius: 20px; }
+  .node-faq-hit { background: #4caf50; border-radius: 6px; padding: 6px 16px; font-size: 12px; display: inline-block; }
+  .node-faq-miss { border: 1px solid #f44336; color: #f44336; border-radius: 6px; padding: 6px 16px; font-size: 12px; display: inline-block; }
+
+  /* 并行分支 */
+  .split-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 0;
+  }
+  .split-row .branch {
+    flex: 1;
+    border-radius: 10px;
+    padding: 12px 14px;
+    border: 1px dashed;
+  }
+
+  /* FAQ 匹配 */
+  .step-faq { background: rgba(83,168,182,0.08); border: 1px solid rgba(83,168,182,0.3); }
+  .step-faq .step-num { background: #53a8b6; }
+  .step-faq .step-title { color: #53a8b6; }
+  .step-faq .step-method { color: #7a9aaa; }
+  .faq-levels {
+    display: flex; gap: 6px; margin-top: 8px;
+  }
+  .faq-level {
+    flex: 1; text-align: center;
+    background: rgba(0,0,0,0.2); border-radius: 6px; padding: 8px 6px; font-size: 11px;
+  }
+  .faq-level .lvl-name { font-weight: 600; margin-bottom: 2px; }
+  .faq-level .lvl-desc { font-size: 10px; }
+  .faq-sep { display: flex; align-items: center; color: #555; font-size: 14px; }
+  .l1 .lvl-name { color: #4caf50; }
+  .l2 .lvl-name { color: #8bc34a; }
+  .l3 .lvl-name { color: #ff9800; }
+  .l4 .lvl-name { color: #f44336; }
+
+  /* 流程续接 */
+  .branch-continue {
+    background: rgba(83,168,182,0.06); border-color: rgba(83,168,182,0.4);
+  }
+  .branch-continue .branch-title { color: #53a8b6; font-weight: 600; font-size: 12px; margin-bottom: 6px; }
+  .branch-continue .branch-desc { font-size: 11px; color: #a0a0b0; line-height: 1.6; }
+  .branch-continue .hit-box {
+    margin-top: 8px; padding: 6px 12px; border-left: 2px solid #4caf50;
+    background: rgba(76,175,80,0.1); font-size: 11px; color: #4caf50; border-radius: 0 4px 4px 0;
+  }
+
+  /* 闲聊 */
+  .branch-chitchat {
+    background: rgba(33,150,243,0.06); border-color: rgba(33,150,243,0.4);
+  }
+  .branch-chitchat .branch-title { color: #2196f3; font-weight: 600; font-size: 12px; margin-bottom: 6px; }
+  .branch-chitchat .branch-desc { font-size: 11px; color: #a0a0b0; line-height: 1.6; }
+  .branch-chitchat .hit-box {
+    margin-top: 8px; padding: 6px 12px; border-left: 2px solid #2196f3;
+    background: rgba(33,150,243,0.1); font-size: 11px; color: #2196f3; border-radius: 0 4px 4px 0;
+  }
+
+  /* 意图路由 */
+  .step-intent { background: rgba(240,192,64,0.06); border: 1px solid rgba(240,192,64,0.3); }
+  .step-intent .step-num { background: #f0c040; }
+  .step-intent .step-title { color: #f0c040; }
+  .step-intent .step-method { color: #b0a060; }
+  .intent-grid {
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-top: 8px;
+  }
+  .intent-node {
+    text-align: center; padding: 10px 6px; border-radius: 8px;
+    border: 1px solid; font-size: 11px;
+  }
+  .intent-node .i-name { font-weight: 700; margin-bottom: 3px; }
+  .intent-node .i-example { font-size: 10px; opacity: 0.7; }
+  .int-process { background: rgba(233,69,96,0.1); border-color: rgba(233,69,96,0.3); }
+  .int-process .i-name { color: #e94560; }
+  .int-policy { background: rgba(76,175,80,0.08); border-color: rgba(76,175,80,0.3); }
+  .int-policy .i-name { color: #4caf50; }
+  .int-def { background: rgba(33,150,243,0.08); border-color: rgba(33,150,243,0.3); }
+  .int-def .i-name { color: #2196f3; }
+  .int-compare { background: rgba(156,39,176,0.08); border-color: rgba(156,39,176,0.3); }
+  .int-compare .i-name { color: #9c27b0; }
+  .int-scope { background: rgba(255,152,0,0.08); border-color: rgba(255,152,0,0.3); }
+  .int-scope .i-name { color: #ff9800; }
+  .int-fallback { background: rgba(158,158,158,0.08); border-color: rgba(158,158,158,0.3); }
+  .int-fallback .i-name { color: #9e9e9e; }
+
+  /* Agent */
+  .step-agent { background: rgba(83,168,182,0.08); border: 1px solid rgba(83,168,182,0.4); }
+  .step-agent .step-num { background: #53a8b6; }
+  .step-agent .step-title { color: #53a8b6; }
+  .agent-loop {
+    display: flex; align-items: center; gap: 8px; font-size: 12px; margin-top: 8px;
+  }
+  .agent-node {
+    background: rgba(0,0,0,0.3); border-radius: 8px;
+    padding: 10px 14px; text-align: center; min-width: 70px;
+  }
+  .agent-node .an-name { font-weight: 700; }
+  .agent-node .an-desc { font-size: 10px; color: #888; margin-top: 2px; }
+  .an-thought .an-name { color: #f0c040; }
+  .an-action .an-name { color: #4caf50; }
+  .an-obs .an-name { color: #2196f3; }
+  .an-final .an-name { color: #e94560; }
+  .agent-arrow { color: #53a8b6; font-size: 16px; font-weight: 700; }
+
+  /* 检索子流程 */
+  .step-retrieval { background: rgba(240,192,64,0.04); border: 1px dashed rgba(240,192,64,0.3); }
+  .step-retrieval .step-title { color: #f0c040; font-weight: 600; font-size: 13px; }
+  .ret-pipeline {
+    display: flex; align-items: center; gap: 4px; font-size: 11px;
+    margin-top: 8px; flex-wrap: wrap;
+  }
+  .ret-node {
+    background: rgba(0,0,0,0.3); border-radius: 6px; padding: 8px 10px; text-align: center;
+  }
+  .ret-node .rn-title { color: #f0c040; font-weight: 600; }
+  .ret-node .rn-detail { color: #888; font-size: 10px; }
+  .ret-sep { color: #f0c040; font-size: 16px; font-weight: 700; }
+
+  /* SSE 输出 */
+  .step-output { background: rgba(233,69,96,0.06); border: 1px solid rgba(233,69,96,0.3); }
+  .step-output .step-num { background: #e94560; color: #fff; }
+  .step-output .step-title { color: #e94560; }
+  .output-grid {
+    display: flex; gap: 8px; margin-top: 8px;
+  }
+  .output-item {
+    flex: 1; text-align: center;
+    background: rgba(0,0,0,0.3); border-radius: 8px; padding: 10px;
+    font-size: 12px;
+  }
+  .output-item .oi-icon { font-size: 16px; margin-bottom: 3px; }
+  .output-item .oi-label { color: #e0e0e0; }
+  .output-item .oi-detail { font-size: 10px; color: #888; margin-top: 2px; }
+
+  .footer {
+    margin-top: 24px;
+    text-align: center;
+    font-size: 12px;
+    color: #555;
+  }
+  .page-indicator {
+    position: fixed;
+    bottom: 20px;
+    right: 30px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 12px;
+    color: #666;
+  }
+  .page-indicator span { color: #e94560; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>核心业务决策流程图</h1>
+<p class="subtitle">从用户提问到答案输出的完整决策链路</p>
+
+<div class="diagram">
+
+  <!-- 起点 -->
+  <div class="endpoint">
+    <div class="node node-start">💬 用户输入消息</div>
+  </div>
+  <div class="arrow-down" style="color:#e94560;">▼</div>
+
+  <!-- 步骤1：FAQ匹配 -->
+  <div class="step-block step-faq">
+    <div class="step-header">
+      <span class="step-num">1</span>
+      <span class="step-title">FAQ 四级匹配</span>
+      <span class="step-method">FaqService.matchFaq()</span>
+    </div>
+    <div class="faq-levels">
+      <div class="faq-level l1">
+        <div class="lvl-name">L1 精确匹配</div>
+        <div class="lvl-desc">问题完全一致</div>
+      </div>
+      <div class="faq-sep">→</div>
+      <div class="faq-level l2">
+        <div class="lvl-name">L2 模糊匹配</div>
+        <div class="lvl-desc">编辑距离 · 关键词重叠</div>
+      </div>
+      <div class="faq-sep">→</div>
+      <div class="faq-level l3">
+        <div class="lvl-name">L3 关键词匹配</div>
+        <div class="lvl-desc">pg_trgm 三元组</div>
+      </div>
+      <div class="faq-sep">→</div>
+      <div class="faq-level l4">
+        <div class="lvl-name">L4 语义匹配</div>
+        <div class="lvl-desc">向量余弦相似度</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FAQ 分支 -->
+  <div style="display:flex; gap:10px; margin:0 0;">
+    <div style="flex:1;text-align:center;">
+      <div class="node-faq-hit">✅ 命中 → 直接返回标准答案（SSE 输出）</div>
+      <div style="font-size:10px;color:#555;margin-top:2px;">对话结束</div>
+    </div>
+    <div style="flex:1;text-align:center;">
+      <div class="node-faq-miss">❌ 未命中 → 继续后续流程</div>
+    </div>
+  </div>
+  <div class="arrow-down" style="color:#f44336;">▼</div>
+
+  <!-- 步骤2 + 步骤3 并行 -->
+  <div class="split-row">
+    <!-- 流程续接 -->
+    <div class="branch branch-continue">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span class="step-num" style="background:#53a8b6;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:700;">2</span>
+        <span class="branch-title">流程续接检测</span>
+        <span style="font-size:10px;color:#7a9aaa;">isInProcessGuidanceFlow()</span>
+      </div>
+      <div class="branch-desc" style="margin-top:6px;">
+        检测上一轮助手回复是否含「第①步」「第②步」标记<br>
+        + 用户回复 ≤ 6字 → 确认续接
+      </div>
+      <div class="hit-box">续接命中 → 注入流程续接指令 → 跳至 Agent 推理</div>
+    </div>
+
+    <!-- 闲聊检测 -->
+    <div class="branch branch-chitchat">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span class="step-num" style="background:#2196f3;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:700;">3</span>
+        <span class="branch-title">闲聊检测</span>
+        <span style="font-size:10px;color:#7a9aaa;">ChitchatDetector.detect()</span>
+      </div>
+      <div class="branch-desc" style="margin-top:6px;">
+        关键词匹配：「你好」「谢谢」「在吗」等<br>
+        + 短文本判断
+      </div>
+      <div class="hit-box">闲聊命中 → 注入闲聊模式 → Agent 自由回复</div>
+    </div>
+  </div>
+  <div class="arrow-down" style="color:#555;">▼</div>
+
+  <!-- 步骤4：意图路由 -->
+  <div class="step-block step-intent">
+    <div class="step-header">
+      <span class="step-num">4</span>
+      <span class="step-title">意图路由</span>
+      <span class="step-method">IntentType.classify() → 正则 + 关键词匹配</span>
+    </div>
+    <div class="intent-grid">
+      <div class="intent-node int-process">
+        <div class="i-name">PROCESS_GUIDE</div>
+        <div class="i-example">"怎么做" "流程"</div>
+      </div>
+      <div class="intent-node int-policy">
+        <div class="i-name">POLICY_QA</div>
+        <div class="i-example">"能报销吗" "规定"</div>
+      </div>
+      <div class="intent-node int-def">
+        <div class="i-name">DEFINITION</div>
+        <div class="i-example">"什么是" "定义"</div>
+      </div>
+      <div class="intent-node int-compare">
+        <div class="i-name">COMPARISON</div>
+        <div class="i-example">"有什么区别"</div>
+      </div>
+      <div class="intent-node int-scope">
+        <div class="i-name">SCOPE_CHECK</div>
+        <div class="i-example">"能不能" "适用"</div>
+      </div>
+      <div class="intent-node int-fallback">
+        <div class="i-name">FALLBACK</div>
+        <div class="i-example">兜底检索</div>
+      </div>
+    </div>
+  </div>
+  <div class="arrow-down" style="color:#f0c040;">▼ selectStrategy() → 按意图注入对应策略 Prompt ▼</div>
+
+  <!-- 步骤5：Agent 推理 -->
+  <div class="step-block step-agent">
+    <div class="step-header">
+      <span class="step-num">5</span>
+      <span class="step-title">Agent 推理 — ReAct 循环</span>
+      <span class="step-method">RagQaAgentService</span>
+    </div>
+    <div class="agent-loop">
+      <div class="agent-node an-thought">
+        <div class="an-name">💭 Thought</div>
+        <div class="an-desc">分析意图<br>决定是否搜索</div>
+      </div>
+      <span class="agent-arrow">→</span>
+      <div class="agent-node an-action">
+        <div class="an-name">⚡ Action</div>
+        <div class="an-desc">searchKnowledge()<br>调用检索工具</div>
+      </div>
+      <span class="agent-arrow">→</span>
+      <div class="agent-node an-obs">
+        <div class="an-name">👁 Observation</div>
+        <div class="an-desc">检索结果<br>+ 质量评分</div>
+      </div>
+      <span class="agent-arrow">→</span>
+      <div class="agent-node an-final">
+        <div class="an-name">📝 Final</div>
+        <div class="an-desc">生成最终回答<br>+ 出处 + 追问</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 检索子流程 -->
+  <div class="step-block step-retrieval">
+    <div class="step-header">
+      <span style="font-size:16px;">📎</span>
+      <span class="step-title">searchKnowledge() 内部检索流水线</span>
+    </div>
+    <div class="ret-pipeline">
+      <div class="ret-node">
+        <div class="rn-title">向量检索</div>
+        <div class="rn-detail">pgvector HNSW · Top10</div>
+      </div>
+      <span class="ret-sep">+</span>
+      <div class="ret-node">
+        <div class="rn-title">关键词检索</div>
+        <div class="rn-detail">pg_trgm · Top10</div>
+      </div>
+      <span class="ret-sep">→</span>
+      <div class="ret-node">
+        <div class="rn-title">RRF 融合</div>
+        <div class="rn-detail">k=60 · Top20</div>
+      </div>
+      <span class="ret-sep">→</span>
+      <div class="ret-node">
+        <div class="rn-title">LLM 重排</div>
+        <div class="rn-detail">相关性打分 · Top5</div>
+      </div>
+      <span class="ret-sep">→</span>
+      <div class="ret-node">
+        <div class="rn-title">结构去重</div>
+        <div class="rn-detail">heading_path · Top3</div>
+      </div>
+      <span class="ret-sep">→</span>
+      <div class="ret-node">
+        <div class="rn-title">质量评分</div>
+        <div class="rn-detail">QualityScore · PASS/FAIL</div>
+      </div>
+    </div>
+  </div>
+  <div class="arrow-down" style="color:#e94560;">▼</div>
+
+  <!-- 步骤6：SSE 输出 -->
+  <div class="step-block step-output">
+    <div class="step-header">
+      <span class="step-num">6</span>
+      <span class="step-title">SSE 流式输出</span>
+      <span class="step-method" style="color:#c08090;">Server-Sent Events · text/event-stream</span>
+    </div>
+    <div class="output-grid">
+      <div class="output-item">
+        <div class="oi-icon">📝</div>
+        <div class="oi-label">答案文本</div>
+        <div class="oi-detail">流式逐字返回</div>
+      </div>
+      <div class="output-item">
+        <div class="oi-icon">📖</div>
+        <div class="oi-label">出处标注</div>
+        <div class="oi-detail">文档名 > 章节 > 条款</div>
+      </div>
+      <div class="output-item">
+        <div class="oi-icon">💡</div>
+        <div class="oi-label">追问建议</div>
+        <div class="oi-detail">3条引导性问题</div>
+      </div>
+      <div class="output-item">
+        <div class="oi-icon">👍👎</div>
+        <div class="oi-label">反馈入口</div>
+        <div class="oi-detail">赞/踩 → QualityService</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 终点 -->
+  <div class="endpoint" style="margin-top:4px;">
+    <div class="node node-end">✅ 用户获得答案 · 质量反馈闭环</div>
+  </div>
+
+</div>
+
+<div class="page-indicator">图 <span>2</span> / 2</div>
+
+</body>
+</html>

@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>系统架构拓扑图 — 制度问答与流程指引助手</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0d1117;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 30px 20px;
+  }
+  h1 {
+    font-size: 24px;
+    color: #fff;
+    margin-bottom: 4px;
+    text-align: center;
+  }
+  .subtitle {
+    font-size: 14px;
+    color: #888;
+    margin-bottom: 24px;
+    text-align: center;
+  }
+  .diagram {
+    width: 100%;
+    max-width: 1100px;
+  }
+  .layer {
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 0;
+    position: relative;
+  }
+  .arrow {
+    text-align: center;
+    font-size: 22px;
+    padding: 4px 0;
+    font-weight: bold;
+  }
+  .layer-title {
+    font-weight: 700;
+    font-size: 15px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .layer-title .icon {
+    font-size: 20px;
+  }
+  .badge {
+    font-size: 11px;
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-weight: 500;
+  }
+
+  /* 用户层 */
+  .layer-user {
+    text-align: center;
+    margin-bottom: 0;
+  }
+  .layer-user .node {
+    display: inline-block;
+    background: #e94560;
+    border-radius: 10px;
+    padding: 12px 32px;
+    color: #fff;
+    font-weight: 700;
+    font-size: 16px;
+  }
+
+  /* 接入层 */
+  .layer-access {
+    background: rgba(233,69,96,0.08);
+    border: 1px solid rgba(233,69,96,0.3);
+    margin: 0 0;
+  }
+  .layer-access .badge { background: rgba(233,69,96,0.2); color: #e94560; }
+  .ctrl-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ctrl-tag {
+    background: rgba(233,69,96,0.12);
+    padding: 5px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #f0a0a8;
+  }
+  .arrow-red { color: #e94560; }
+
+  /* Hook层 */
+  .layer-hook {
+    background: rgba(15,52,96,0.2);
+    border: 1px solid #0f3460;
+    margin: 0 0;
+    display: flex;
+    gap: 16px;
+  }
+  .hook-main { flex: 1; }
+  .hook-side { width: 200px; background: rgba(15,52,96,0.1); border-radius: 8px; padding: 12px; }
+  .hook-steps { display: flex; flex-direction: column; gap: 5px; }
+  .hook-step {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; padding: 4px 0;
+  }
+  .hook-step .num {
+    background: #53a8b6; color: #1a1a2e;
+    padding: 2px 7px; border-radius: 3px; font-size: 11px; font-weight: 700;
+  }
+  .hook-step .desc { color: #53a8b6; }
+  .hook-step .detail { color: #7a9aaa; font-size: 10px; }
+  .arrow-blue { color: #0f3460; }
+  .intent-tag {
+    display: block; font-size: 11px; color: #53a8b6; padding: 3px 0;
+    border-bottom: 1px solid rgba(83,168,182,0.1);
+  }
+
+  /* Agent层 */
+  .layer-agent {
+    background: rgba(83,168,182,0.08);
+    border: 1px solid rgba(83,168,182,0.4);
+    margin: 0 0;
+    display: flex; gap: 16px;
+  }
+  .agent-main { flex: 1; }
+  .agent-loop { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+  .agent-step {
+    background: rgba(0,0,0,0.25);
+    border-radius: 8px; padding: 10px 14px; text-align: center;
+    min-width: 80px;
+  }
+  .agent-step .step-name { font-weight: 700; font-size: 13px; }
+  .agent-step .step-desc { font-size: 11px; color: #888; margin-top: 2px; }
+  .agent-sep { color: #53a8b6; font-size: 18px; font-weight: 700; }
+  .agent-context {
+    width: 130px; font-size: 11px; color: #888; text-align: center;
+    background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .thought .step-name { color: #f0c040; }
+  .action .step-name { color: #4caf50; }
+  .observation .step-name { color: #2196f3; }
+  .final .step-name { color: #e94560; }
+  .arrow-teal { color: #53a8b6; }
+
+  /* 检索层 */
+  .layer-retrieval {
+    background: rgba(240,192,64,0.06);
+    border: 1px solid rgba(240,192,64,0.3);
+    margin: 0 0;
+  }
+  .retrieval-pipeline {
+    display: flex; gap: 6px; align-items: stretch;
+  }
+  .retrieval-node {
+    flex: 1; background: rgba(0,0,0,0.25);
+    border-radius: 8px; padding: 12px 8px; text-align: center;
+    font-size: 12px; min-width: 0;
+  }
+  .retrieval-node .node-title { color: #f0c040; font-weight: 700; margin-bottom: 4px; }
+  .retrieval-node .node-tech { color: #a0a0b0; font-size: 11px; }
+  .retrieval-node .node-param { color: #707070; font-size: 10px; }
+  .retrieval-sep {
+    display: flex; align-items: center;
+    color: #f0c040; font-size: 20px; font-weight: 700;
+  }
+  .arrow-gold { color: #f0c040; }
+
+  /* 数据层 */
+  .layer-data {
+    background: rgba(240,192,64,0.08);
+    border: 1px solid rgba(240,192,64,0.3);
+    margin: 0 0;
+    display: flex; gap: 12px;
+  }
+  .data-node {
+    flex: 1; background: rgba(0,0,0,0.3);
+    border-radius: 8px; padding: 14px; text-align: center;
+  }
+  .data-node .data-title { color: #f0c040; font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+  .data-node .data-desc { color: #a0a0b0; font-size: 12px; }
+  .data-node .data-tech { color: #707070; font-size: 11px; }
+
+  /* 底部信息 */
+  .footer {
+    margin-top: 30px;
+    text-align: center;
+    font-size: 12px;
+    color: #555;
+  }
+
+  /* 分页提示 */
+  .page-indicator {
+    position: fixed;
+    bottom: 20px;
+    right: 30px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 12px;
+    color: #666;
+  }
+  .page-indicator span { color: #e94560; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>系统架构拓扑图</h1>
+<p class="subtitle">制度问答与流程指引助手 &mdash; 端到端技术架构</p>
+
+<div class="diagram">
+
+  <!-- 用户层 -->
+  <div class="layer layer-user">
+    <div class="node">👤 用户浏览器 &mdash; Vue 3 SPA + SSE Client</div>
+  </div>
+  <div class="arrow arrow-red">▼ SSE / REST API ▼</div>
+
+  <!-- 接入层 -->
+  <div class="layer layer-access">
+    <div class="layer-title">
+      <span class="icon">🌐</span> 接入层
+      <span class="badge">Spring MVC</span>
+    </div>
+    <div class="ctrl-tags">
+      <span class="ctrl-tag">AgentController</span>
+      <span class="ctrl-tag">KnowledgeBaseController</span>
+      <span class="ctrl-tag">FaqController</span>
+      <span class="ctrl-tag">KnowledgeDocumentController</span>
+      <span class="ctrl-tag">AuthController</span>
+      <span class="ctrl-tag">QualityController</span>
+      <span class="ctrl-tag">UserController</span>
+    </div>
+  </div>
+  <div class="arrow arrow-blue">▼</div>
+
+  <!-- Hook 层 -->
+  <div class="layer layer-hook">
+    <div class="hook-main">
+      <div class="layer-title">
+        <span class="icon">🔧</span> Hook 前置处理层
+        <span class="badge" style="background:rgba(15,52,96,0.3);color:#53a8b6;">RagQaMessageHook @BEFORE_MODEL</span>
+      </div>
+      <div class="hook-steps">
+        <div class="hook-step">
+          <span class="num">1</span>
+          <span class="desc">FAQ 四级匹配</span>
+          <span class="detail">精确 → 模糊 → 关键词 → 语义 | 命中直接返回</span>
+        </div>
+        <div class="hook-step">
+          <span class="num">2</span>
+          <span class="desc">流程续接检测</span>
+          <span class="detail">isInProcessGuidanceFlow() + isFlowContinuation()</span>
+        </div>
+        <div class="hook-step">
+          <span class="num">3</span>
+          <span class="desc">闲聊检测</span>
+          <span class="detail">ChitchatDetector.detect() | 关键词 + 长度判断</span>
+        </div>
+        <div class="hook-step">
+          <span class="num">4</span>
+          <span class="desc">意图路由</span>
+          <span class="detail">IntentType.classify() | 正则匹配 → 6种意图</span>
+        </div>
+        <div class="hook-step">
+          <span class="num">5</span>
+          <span class="desc">策略注入</span>
+          <span class="detail">selectStrategy() → System Prompt 动态注入</span>
+        </div>
+      </div>
+    </div>
+    <div class="hook-side">
+      <div style="font-size:10px; color:#707080; text-transform:uppercase; margin-bottom:6px;">6种意图类型</div>
+      <span class="intent-tag">PROCESS_GUIDE</span>
+      <span class="intent-tag">POLICY_QA</span>
+      <span class="intent-tag">DEFINITION</span>
+      <span class="intent-tag">COMPARISON</span>
+      <span class="intent-tag">SCOPE_CHECK</span>
+      <span class="intent-tag">FALLBACK</span>
+    </div>
+  </div>
+  <div class="arrow arrow-teal">▼ selectStrategy() → 注入 System Prompt ▼</div>
+
+  <!-- Agent 层 -->
+  <div class="layer layer-agent">
+    <div class="agent-main">
+      <div class="layer-title">
+        <span class="icon">🧠</span> Agent 推理层
+        <span class="badge" style="background:rgba(83,168,182,0.2);color:#53a8b6;">ReAct 模式</span>
+      </div>
+      <div class="agent-loop">
+        <div class="agent-step thought">
+          <div class="step-name">💭 Thought</div>
+          <div class="step-desc">分析意图<br>决定搜索策略</div>
+        </div>
+        <span class="agent-sep">→</span>
+        <div class="agent-step action">
+          <div class="step-name">⚡ Action</div>
+          <div class="step-desc">searchKnowledge()<br>调用检索工具</div>
+        </div>
+        <span class="agent-sep">→</span>
+        <div class="agent-step observation">
+          <div class="step-name">👁 Observation</div>
+          <div class="step-desc">检索结果<br>+ 质量评分</div>
+        </div>
+        <span class="agent-sep">→</span>
+        <div class="agent-step final">
+          <div class="step-name">📝 Final</div>
+          <div class="step-desc">生成回答<br>+ 出处 + 追问</div>
+        </div>
+      </div>
+    </div>
+    <div class="agent-context">
+      <div>Base System Prompt</div>
+      <div style="margin:4px 0;color:#555;">+</div>
+      <div>策略 Prompt</div>
+      <div style="margin:4px 0;color:#555;">+</div>
+      <div>对话历史 (5轮)</div>
+    </div>
+  </div>
+  <div class="arrow arrow-teal">▼ searchKnowledge Tool ▼</div>
+
+  <!-- 检索层 -->
+  <div class="layer layer-retrieval">
+    <div class="layer-title">
+      <span class="icon">🔍</span> 混合检索层
+      <span class="badge" style="background:rgba(240,192,64,0.15);color:#f0c040;">KnowledgeBaseService.retrieveAndRerank()</span>
+    </div>
+    <div class="retrieval-pipeline">
+      <div class="retrieval-node">
+        <div class="node-title">向量检索</div>
+        <div class="node-tech">pgvector</div>
+        <div class="node-param">HNSW 索引</div>
+        <div class="node-param">cosine 相似度</div>
+        <div class="node-param">Top 10</div>
+      </div>
+      <div class="retrieval-sep">+</div>
+      <div class="retrieval-node">
+        <div class="node-title">关键词检索</div>
+        <div class="node-tech">pg_trgm</div>
+        <div class="node-param">三元组匹配</div>
+        <div class="node-param">相似度 ≥ 0.3</div>
+        <div class="node-param">Top 10</div>
+      </div>
+      <div class="retrieval-sep">→</div>
+      <div class="retrieval-node">
+        <div class="node-title">RRF 融合</div>
+        <div class="node-tech">Reciprocal Rank</div>
+        <div class="node-param">k = 60</div>
+        <div class="node-param">Top 20</div>
+      </div>
+      <div class="retrieval-sep">→</div>
+      <div class="retrieval-node">
+        <div class="node-title">LLM 重排序</div>
+        <div class="node-tech">LLM Reranker</div>
+        <div class="node-param">相关性打分</div>
+        <div class="node-param">Top 5</div>
+      </div>
+      <div class="retrieval-sep">→</div>
+      <div class="retrieval-node">
+        <div class="node-title">结构去重</div>
+        <div class="node-tech">heading_path</div>
+        <div class="node-param">同章节去重</div>
+        <div class="node-param">Top 3</div>
+      </div>
+      <div class="retrieval-sep">→</div>
+      <div class="retrieval-node">
+        <div class="node-title">质量评分</div>
+        <div class="node-tech">QualityScore</div>
+        <div class="node-param">RRF + LLM 综合</div>
+        <div class="node-param">PASS / FAIL</div>
+      </div>
+    </div>
+  </div>
+  <div class="arrow arrow-gold">▼</div>
+
+  <!-- 数据层 -->
+  <div class="layer layer-data">
+    <div class="data-node">
+      <div class="data-title">💾 PostgreSQL</div>
+      <div class="data-desc">业务数据存储</div>
+      <div class="data-tech">用户 · FAQ · 会话 · 文档 · 质量</div>
+    </div>
+    <div class="data-node">
+      <div class="data-title">🔢 pgvector 扩展</div>
+      <div class="data-desc">向量索引</div>
+      <div class="data-tech">VECTOR(1536) · HNSW · 余弦相似度</div>
+    </div>
+    <div class="data-node">
+      <div class="data-title">🔤 pg_trgm 扩展</div>
+      <div class="data-desc">全文关键词检索</div>
+      <div class="data-tech">三元组匹配 · GIN 索引</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="page-indicator">图 <span>1</span> / 2</div>
+
+</body>
+</html>
