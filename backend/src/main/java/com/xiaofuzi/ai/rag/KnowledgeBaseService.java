@@ -542,8 +542,15 @@ public class KnowledgeBaseService {
 
         double rrfAvg = count > 0 ? rrfSum / count : 0;
         double llmAvg = count > 0 ? llmSum / count : 0;
-        // LLM 重排未触发时（候选 ≤ rerankTopN），跳过质量门槛，信任 RRF 融合结果
-        int effectivePassCount = hasLlmScores ? passCount : count;
+        // LLM 重排未触发时（候选 ≤ rerankTopN），用 RRF 分数作为质量门槛
+        int effectivePassCount;
+        if (hasLlmScores) {
+            effectivePassCount = passCount;
+        } else {
+            effectivePassCount = (int) docs.stream()
+                    .filter(d -> parseMetaDouble(d.getMetadata().get("rrf_score")) >= qualityRrfThreshold)
+                    .count();
+        }
         return new QualityScore(maxCombined, rrfAvg, llmAvg, effectivePassCount);
     }
 

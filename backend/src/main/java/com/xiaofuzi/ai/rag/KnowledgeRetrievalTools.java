@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
@@ -45,6 +46,9 @@ public class KnowledgeRetrievalTools {
         this.knowledgeBaseService = knowledgeBaseService;
     }
 
+    @Value("${app.rag.search-similarity-threshold:0.5}")
+    private double searchSimilarityThreshold;
+
     private static final int AGENT_CONTEXT_MAX_LENGTH = 3000;
 
     private record SearchResult(List<Document> docs, QualityStatus quality, QualityScore score,
@@ -56,7 +60,7 @@ public class KnowledgeRetrievalTools {
         logger.info("RAG工具调用 - searchKnowledge: query='{}', department='{}'",
                 query, DepartmentContextHolder.get());
 
-        SearchResult result = doSearch(query, 5, 0.0);
+        SearchResult result = doSearch(query, 5, searchSimilarityThreshold);
 
         // ★ 存储本次检索元信息供 SSE 事件使用
         lastSearchInfoHolder.set(Map.of(

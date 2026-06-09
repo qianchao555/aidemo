@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -35,6 +36,10 @@ public class RagQaAgentService {
     private static final String SOURCE_SEPARATOR = ">";
     private static final int TITLE_MAX_LENGTH = 30;
     private static final String DEFAULT_SESSION_TITLE = "新对话";
+
+    /** 匹配 LLM 未正确遵循系统指令时回显的原始模板文本 */
+    private static final Pattern RAW_TEMPLATE_ECHO =
+            Pattern.compile("【系统指令-最高优先级】[\\s\\S]*?回复模板：[\\s\\n]*");
 
     private final ReactAgent ragQaAgent;
     private final ChatHistoryMapper chatHistoryMapper;
@@ -74,6 +79,7 @@ public class RagQaAgentService {
             RagQaMessageHook.setCurrentUserQuery(question);
             AssistantMessage agentResponse = ragQaAgent.call(enrichedQuestion);
             String responseText = agentResponse.getText();
+            responseText = sanitizeRawTemplateEcho(responseText);
             logger.info("RAG问答完成 | threadId: {} | 响应长度: {} 字符", threadId, responseText.length());
 
             String[] srcInfo = extractSourceInfo(responseText);
@@ -192,6 +198,27 @@ public class RagQaAgentService {
         String doc = parts[0].trim();
         String heading = parts.length > 1 ? parts[1].trim() : null;
         return new String[]{doc.isEmpty() ? null : doc, heading != null && heading.isEmpty() ? null : heading};
+    }
+
+    /**
+     * 清除 LLM 未能正确遵循系统指令时回显的原始模板标记。
+     * 当 searchKnowledge 返回【系统指令-最高优先级】…回复模板：… 时，
+     * Agent 应只输出回复模板的内容，但部分模型会直接回显整段指令。
+     * 此方法在服务层兜底清洗，确保用户永远看不到原始模板文本。
+     */
+    private String sanitizeRawTemplateEcho(String responseText) {
+        if (responseText == null || responseText.isBlank()) return responseText;
+        if (!responseText.contains("【系统指令-最高优先级】")
+                && !responseText.contains("回复模板：")) {
+            return responseText;
+        }
+        String cleaned = RAW_TEMPLATE_ECHO.matcher(responseText).replaceFirst("");
+        if (cleaned.isBlank()) {
+            cleaned = "抱歉，我暂时无法回答您的问题，建议您联系 HR 获取帮助。";
+        }
+        logger.warn("Agent 回显了原始模板标记，已自动清洗。原文长度={}, 清洗后长度={}",
+                responseText.length(), cleaned.length());
+        return cleaned;
     }
 
     private void updateSession(String threadId, Long userId) {
