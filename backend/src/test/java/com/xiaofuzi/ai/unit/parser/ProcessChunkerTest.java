@@ -58,4 +58,61 @@ class ProcessChunkerTest {
         List<Document> chunks = ProcessChunker.chunk("", "empty");
         assertThat(chunks).hasSize(1);
     }
+
+    @Test
+    @DisplayName("多章节流程文档 → 章节上下文传播到步骤 heading_path")
+    void shouldPropagateChapterContextToSteps() {
+        String text = "第一章 年假申请流程\n流程概览\n年假申请共3步。\n"
+                + "第1步：确认年假资格\n角色：员工本人\n确认剩余年假天数。\n"
+                + "第2步：提交申请\n角色：员工本人\n登录OA系统提交申请。\n"
+                + "第二章 病假申请流程\n流程概览\n病假申请共2步。\n"
+                + "第1步：获取诊断证明\n角色：员工本人\n到医院获取诊断证明。\n"
+                + "第2步：提交病假申请\n角色：员工本人\n在OA系统提交申请。\n";
+
+        List<Document> chunks = ProcessChunker.chunk(text, "process");
+
+        assertThat(chunks).isNotEmpty();
+
+        // 找到年假第1步
+        Document annualStep1 = chunks.stream()
+                .filter(d -> d.getText().contains("确认年假资格"))
+                .findFirst().orElseThrow();
+        assertThat(annualStep1.getMetadata().get("heading_path"))
+                .asString()
+                .startsWith("第一章 年假申请流程");
+        assertThat(annualStep1.getMetadata().get("step_title"))
+                .asString()
+                .contains("确认年假资格");
+
+        // 找到病假第1步
+        Document sickStep1 = chunks.stream()
+                .filter(d -> d.getText().contains("获取诊断证明"))
+                .findFirst().orElseThrow();
+        assertThat(sickStep1.getMetadata().get("heading_path"))
+                .asString()
+                .startsWith("第二章 病假申请流程");
+        assertThat(sickStep1.getMetadata().get("step_title"))
+                .asString()
+                .contains("获取诊断证明");
+
+        // 两个不同章节的第1步 heading_path 应不同（去重key会区分）
+        String annualPath = (String) annualStep1.getMetadata().get("heading_path");
+        String sickPath = (String) sickStep1.getMetadata().get("heading_path");
+        assertThat(annualPath).isNotEqualTo(sickPath);
+    }
+
+    @Test
+    @DisplayName("无章节文本 → 回退扁平切分（不设 heading_path）")
+    void shouldFallbackToFlatChunkingWhenNoChapters() {
+        String text = "第1步：填写申请单\n角色：员工本人\n填写请假申请单。\n"
+                + "第2步：部门审批\n角色：部门负责人\n审批申请。\n";
+
+        List<Document> chunks = ProcessChunker.chunk(text, "process");
+
+        assertThat(chunks.size()).isGreaterThanOrEqualTo(2);
+        // 无章节时 heading_path 不应设置（兼容旧行为）
+        Document first = chunks.get(0);
+        Object headingPath = first.getMetadata().get("heading_path");
+        assertThat(headingPath).isNull();
+    }
 }

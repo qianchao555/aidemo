@@ -815,15 +815,18 @@ public class KnowledgeBaseService {
             header.append(String.format("\n[参考%d] 来源: %s", i + 1, source));
 
             if (meta != null) {
-                // 制度文档：章节路径
+                // 制度文档 / 流程文档（有章节）：完整层级路径
                 String headingPath = (String) meta.get(AppConstants.META_HEADING_PATH);
-                if (headingPath != null && !headingPath.isBlank()) {
+                boolean hasHeadingPath = headingPath != null && !headingPath.isBlank();
+                if (hasHeadingPath) {
                     header.append(" > ").append(headingPath);
                 }
-                // 流程文档：步骤标题
-                String stepTitle = (String) meta.get(AppConstants.META_STEP_TITLE);
-                if (stepTitle != null && !stepTitle.isBlank()) {
-                    header.append(" | ").append(stepTitle);
+                // 流程文档：步骤标题（仅当 heading_path 未包含时显示，避免冗余）
+                if (!hasHeadingPath) {
+                    String stepTitle = (String) meta.get(AppConstants.META_STEP_TITLE);
+                    if (stepTitle != null && !stepTitle.isBlank()) {
+                        header.append(" | ").append(stepTitle);
+                    }
                 }
                 // 流程文档：角色 / 时限 / 材料
                 appendIfPresent(header, meta, "step_role", " | 角色：");
