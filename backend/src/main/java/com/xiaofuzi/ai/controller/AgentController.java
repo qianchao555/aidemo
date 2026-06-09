@@ -57,6 +57,7 @@ public class AgentController {
     private static final String SSE_EVENT_THINKING = "thinking";
     private static final String SSE_EVENT_SEARCH_INFO = "search_info";
     private static final String SSE_EVENT_VERSION_INFO = "version_info";
+    private static final String SSE_EVENT_SOURCE = "source";
     private static final String SSE_EVENT_TOKEN = "token";
     private static final String SSE_EVENT_DONE = "done";
     private static final String SSE_EVENT_ERROR = "error";
@@ -127,6 +128,16 @@ public class AgentController {
                     String searchJson = objectMapper.writeValueAsString(
                             Map.of(SSE_TYPE_KEY, SSE_EVENT_SEARCH_INFO, SSE_CONTENT_KEY, searchInfo));
                     emitter.send(SseEmitter.event().name(SSE_EVENT_SEARCH_INFO).data(searchJson));
+                }
+
+                // ★ 推送检索到的文档来源（引用出处），供前端展示结构化引用面板
+                List<Map<String, String>> searchSources = com.xiaofuzi.ai.rag.KnowledgeRetrievalTools.consumeLastSearchSources();
+                if (searchSources != null && !searchSources.isEmpty()) {
+                    for (Map<String, String> src : searchSources) {
+                        String sourceJson = objectMapper.writeValueAsString(
+                                Map.of(SSE_TYPE_KEY, SSE_EVENT_SOURCE, SSE_CONTENT_KEY, src));
+                        emitter.send(SseEmitter.event().name(SSE_EVENT_SOURCE).data(sourceJson));
+                    }
                 }
 
                 // 推送版本追溯信息给前端

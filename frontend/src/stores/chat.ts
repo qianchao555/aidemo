@@ -70,27 +70,35 @@ export const useChatStore = defineStore('chat', () => {
       // 从 block 中提取所有引用行（支持 - item 列表和纯文本行）
       const itemLines = block.split('\n')
         .map(l => l.replace(/^[-\s•\d.]*/, '').trim())
-        .filter(l => l.length > 0 && l.includes('>'))
+        .filter(l => l.length > 0)
 
       if (itemLines.length > 0) {
         for (const line of itemLines) {
-          const parts = line.split('>').map(s => s.trim())
+          if (line.includes('>')) {
+            const parts = line.split('>').map(s => s.trim())
+            sources.push({
+              document: parts[0] || '',
+              clause: parts.slice(1).join(' > ') || undefined
+            })
+          } else {
+            // 无 > 分隔符时，整行作为文档名
+            sources.push({
+              document: line,
+              clause: undefined
+            })
+          }
+        }
+      } else {
+        // 回退：尝试同行解析
+        const firstLine = block.split('\n')[0].trim()
+        if (firstLine) {
+          const parts = firstLine.includes('>')
+            ? firstLine.split('>').map(s => s.trim())
+            : [firstLine]
           sources.push({
             document: parts[0] || '',
             clause: parts.slice(1).join(' > ') || undefined
           })
-        }
-      } else {
-        // 回退：尝试同行解析（兼容无 > 分隔符的旧格式）
-        const firstLine = block.split('\n')[0].trim()
-        if (firstLine) {
-          const parts = firstLine.split('>').map(s => s.trim())
-          if (parts[0]) {
-            sources.push({
-              document: parts[0],
-              clause: parts.slice(1).join(' > ') || undefined
-            })
-          }
         }
       }
     }

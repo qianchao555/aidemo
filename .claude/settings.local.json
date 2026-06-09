@@ -61,7 +61,9 @@
       "Bash(pip show *)",
       "Bash(pip install *)",
       "Bash(C:/softwareWork/Python/python.exe *)",
-      "Bash(/c/softwareWork/anaconda/python *)"
+      "Bash(/c/softwareWork/anaconda/python *)",
+      "Bash(pip list *)",
+      "Bash(C:/softwarework/anaconda/python.exe *)"
     ]
   }
 }

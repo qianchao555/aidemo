@@ -9,7 +9,10 @@ import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -35,11 +38,24 @@ public class KnowledgeRetrievalTools {
      */
     private static final ThreadLocal<Map<String, Object>> lastSearchInfoHolder = new ThreadLocal<>();
 
+    /**
+     * ThreadLocal 存储最近一次检索到的文档来源列表，供 SSE 流 source 事件使用。
+     * 每个元素格式：{document, clause}
+     */
+    private static final ThreadLocal<List<Map<String, String>>> lastSearchSourcesHolder = new ThreadLocal<>();
+
     /** 获取并清除当前线程最近一次检索的元信息 */
     public static Map<String, Object> consumeLastSearchInfo() {
         Map<String, Object> info = lastSearchInfoHolder.get();
         lastSearchInfoHolder.remove();
         return info;
+    }
+
+    /** 获取并清除当前线程最近一次检索的文档来源列表 */
+    public static List<Map<String, String>> consumeLastSearchSources() {
+        List<Map<String, String>> sources = lastSearchSourcesHolder.get();
+        lastSearchSourcesHolder.remove();
+        return sources;
     }
 
     public KnowledgeRetrievalTools(KnowledgeBaseService knowledgeBaseService) {
@@ -68,6 +84,8 @@ public class KnowledgeRetrievalTools {
                 "vectorCount", result.vectorCount,
                 "keywordCount", result.keywordCount,
                 "mergedCount", result.mergedCount));
+
+        storeSearchSources(result.docs);
 
         if (result.docs.isEmpty()) {
             return "【系统指令-最高优先级】\n"
@@ -127,5 +145,39 @@ public class KnowledgeRetrievalTools {
     private static int toInt(Object val) {
         if (val instanceof Number n) return n.intValue();
         return 0;
+    }
+
+    /**
+     * 从检索结果中提取文档来源信息（文档名 + 章节路径），
+     * 存入 ThreadLocal 供 SSE source 事件使用。
+     */
+    private static void storeSearchSources(List<Document> docs) {
+        if (docs == null || docs.isEmpty()) {
+            lastSearchSourcesHolder.set(List.of());
+            return;
+        }
+        List<Map<String, String>> sources = new ArrayList<>();
+        LinkedHashSet<String> seen = new LinkedHashSet<>();
+        for (Document doc : docs) {
+            if (doc.getMetadata() == null) continue;
+            String source = (String) doc.getMetadata().getOrDefault("source", "");
+            String headingPath = (String) doc.getMetadata().get(com.xiaofuzi.ai.util.AppConstants.META_HEADING_PATH);
+            String stepTitle = (String) doc.getMetadata().get(com.xiaofuzi.ai.util.AppConstants.META_STEP_TITLE);
+            String clause = (headingPath != null && !headingPath.isBlank())
+                    ? headingPath
+                    : (stepTitle != null && !stepTitle.isBlank() ? stepTitle : null);
+            String key = source + "|" + (clause != null ? clause : "");
+            if (!seen.add(key)) continue;
+            Map<String, String> item = new LinkedHashMap<>();
+            item.put("document", source);
+            if (clause != null) item.put("clause", clause);
+            // 传递 group_id 和 version 供前端版本切换
+            String groupId = (String) doc.getMetadata().get(com.xiaofuzi.ai.util.AppConstants.META_GROUP_ID);
+            if (groupId != null) item.put("group_id", groupId);
+            String version = (String) doc.getMetadata().get(com.xiaofuzi.ai.util.AppConstants.META_VERSION);
+            if (version != null) item.put("version", version);
+            sources.add(item);
+        }
+        lastSearchSourcesHolder.set(sources);
     }
 }
